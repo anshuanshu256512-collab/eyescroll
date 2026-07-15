@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EyeScroll</string>
+    <string name="accessibility_service_label">EyeScroll Gesture Control</string>
+    <string name="accessibility_service_description">EyeScroll uses Accessibility Service ONLY to perform swipe and tap gestures. It does NOT read or store any screen content.</string>
+</resources>
