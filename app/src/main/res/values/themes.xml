@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EyeScroll" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#00C3FF</item>
+        <item name="colorPrimaryVariant">#0088BB</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="android:windowBackground">#040D1A</item>
+        <item name="android:statusBarColor">#040D1A</item>
+    </style>
+</resources>
