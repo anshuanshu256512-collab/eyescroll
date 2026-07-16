@@ -75,7 +75,7 @@ public class EyeOverlayService extends Service {
             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT);
         wm.addView(wv,p);
-        wv.setVisibility(android.view.View.VISIBILITY);
+        wv.setVisibility(android.view.View.VISIBILE);
         wv.loadUrl("file:///android_asset/eyetracker.html#cursor-only");
     }
     private class Bridge {
