@@ -56,4 +56,11 @@
             android:padding="16dp" android:background="#0B1628"
             android:layout_marginBottom="32dp"/>
     </LinearLayout>
+    <!-- Calibration WebView container -->
+<FrameLayout
+    android:id="@+id/calib_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:visibility="gone"
+    android:background="#000000" />
 </ScrollView>
