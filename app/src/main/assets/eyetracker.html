@@ -2749,6 +2749,7 @@ function startBlinkPoll() {
 
 if (IS_ANDROID) {
   document.addEventListener('DOMContentLoaded', function() {
+    document.body.classList.add('android-overlay'); 
     document.body.style.paddingTop = '24px';
 
     var stopBtn = document.createElement('button');
