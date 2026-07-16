@@ -23,7 +23,7 @@
 
   <style>
 /* ═══════════════════════════════════════════════
-   DESIGN TOKENS
+   DESIGN TOKEN
 ═══════════════════════════════════════════════ */
 :root {
   --bg:           #040d1a;
@@ -2749,10 +2749,30 @@ function startBlinkPoll() {
 
 if (IS_ANDROID) {
   document.addEventListener('DOMContentLoaded', function() {
-    /* Add safe-area padding for Android notch/status bar */
     document.body.style.paddingTop = '24px';
 
-    /* Show a subtle "EyeScroll Active" badge on tracking screen */
+    var stopBtn = document.createElement('button');
+    stopBtn.textContent = '■ Stop EyeScroll';
+    stopBtn.style.cssText = [
+      'position:fixed',
+      'top:8px',
+      'right:8px',
+      'background:rgba(255,50,50,0.9)',
+      'color:white',
+      'border:none',
+      'padding:8px 16px',
+      'border-radius:20px',
+      'font-size:13px',
+      'font-weight:bold',
+      'z-index:999999',
+      'cursor:pointer',
+      'font-family:sans-serif'
+    ].join(';');
+    stopBtn.addEventListener('click', function() {
+      try { window.EyeScroll.stopService(); } catch(e) {}
+    });
+    document.body.appendChild(stopBtn);
+
     var badge = document.createElement('div');
     badge.style.cssText = [
       'position:fixed',
@@ -2767,12 +2787,12 @@ if (IS_ANDROID) {
       'border-radius:20px',
       'z-index:99998',
       'pointer-events:none',
-      'font-family:sans-serif',
-      'letter-spacing:0.5px'
+      'font-family:sans-serif'
     ].join(';');
     badge.textContent = '👁 EyeScroll Active';
     document.body.appendChild(badge);
   });
+}
 }
 </script>
 </body>
