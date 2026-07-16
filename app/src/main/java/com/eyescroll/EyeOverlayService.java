@@ -48,6 +48,7 @@ public class EyeOverlayService extends Service {
         ws.setAllowUniversalAccessFromFileURLs(true);
         ws.setDomStorageEnabled(true);
         wv.setBackgroundColor(0x00000000);
+        wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
         wv.addJavascriptInterface(new Bridge(),"EyeScroll");
         wv.setWebChromeClient(new WebChromeClient(){
             @Override public void onPermissionRequest(PermissionRequest r){r.grant(r.getResources());}
@@ -74,6 +75,7 @@ public class EyeOverlayService extends Service {
             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT);
         wm.addView(wv,p);
+        wv.setVisibility(android.view.View.VISIBLE);
         wv.loadUrl("file:///android_asset/eyetracker.html");
     }
     private class Bridge {
@@ -86,9 +88,11 @@ public class EyeOverlayService extends Service {
                 svc.performGesture(code);
             }
         }
+
         @JavascriptInterface public void onCalibrationDone(){
-            /* Touch already transparent from start - nothing needed */
+    wv.post(()->wv.setVisibility(android.view.View.VISIBLE));
         }
+        
         @JavascriptInterface public void onCalibrationStart(){
             /* Touch already transparent - calibration dots tapped via gaze */
         }
