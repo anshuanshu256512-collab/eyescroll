@@ -62,8 +62,8 @@ public class EyeOverlayService extends Service {
             PendingIntent.FLAG_IMMUTABLE);
 
         startForeground(NID,new NotificationCompat.Builder(this,CH_ID)
-            .setContentTitle("ðŸ‘ EyeScroll Active")
-            .setContentText("Eye control running â€” tap to open app")
+            .setContentTitle("👁 EyeScroll Active")
+            .setContentText("Eye control running — tap to open app")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentIntent(openPi)
             .addAction(android.R.drawable.ic_delete,"Stop",pi)
