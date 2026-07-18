@@ -1,66 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#040D1A">
-    <LinearLayout
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="#040D1A"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="👁"
+        android:textSize="56sp"
+        android:gravity="center"
+        android:layout_marginTop="48dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="EyeScroll"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#00C3FF"
+        android:gravity="center"
+        android:layout_marginTop="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scroll reels with your eyes"
+        android:textSize="14sp"
+        android:textColor="#8AAFC8"
+        android:gravity="center"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="32dp"/>
+
+    <TextView
+        android:id="@+id/status_camera"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:gravity="center_horizontal">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="👁" android:textSize="56sp" android:gravity="center"
-            android:layout_marginTop="32dp"/>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="EyeScroll" android:textSize="32sp" android:textStyle="bold"
-            android:textColor="#00C3FF" android:gravity="center" android:layout_marginTop="8dp"/>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Scroll reels with your eyes"
-            android:textSize="14sp" android:textColor="#8AAFC8"
-            android:gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="24dp"/>
-        <TextView android:id="@+id/status_camera"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="📷 Camera — Tap to grant"
-            android:textSize="15sp" android:textColor="#FFB800"
-            android:padding="16dp" android:background="#0B1628"
-            android:layout_marginBottom="8dp"/>
-        <TextView android:id="@+id/status_overlay"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="🪟 Display Over Apps — Tap to grant"
-            android:textSize="15sp" android:textColor="#FFB800"
-            android:padding="16dp" android:background="#0B1628"
-            android:layout_marginBottom="8dp"/>
-        <TextView android:id="@+id/status_accessibility"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="♿ Accessibility — Tap to grant"
-            android:textSize="15sp" android:textColor="#FFB800"
-            android:padding="16dp" android:background="#0B1628"
-            android:layout_marginBottom="24dp"/>
-        <Button android:id="@+id/btn_launch"
-            android:layout_width="match_parent" android:layout_height="56dp"
-            android:text="Grant Permissions and Launch"
-            android:textSize="16sp" android:textStyle="bold"
-            android:textColor="#000000" android:backgroundTint="#00C3FF"
-            android:layout_marginBottom="12dp"/>
-        <Button android:id="@+id/btn_stop"
-            android:layout_width="match_parent" android:layout_height="48dp"
-            android:text="Stop EyeScroll"
-            android:textSize="14sp" android:textColor="#D8EEFF"
-            android:backgroundTint="#22FFFFFF"
-            android:layout_marginBottom="32dp"
-            android:visibility="gone"/>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="👆 Look UP = Previous Reel&#10;👇 Look DOWN = Next Reel&#10;😑 1 Blink = Pause/Play&#10;❤ 2 Blinks = Like&#10;🔔 3 Blinks = Subscribe"
-            android:textSize="14sp" android:textColor="#8AAFC8"
-            android:padding="16dp" android:background="#0B1628"
-            android:layout_marginBottom="32dp"/>
-    </LinearLayout>
-    <!-- Calibration WebView container -->
-<FrameLayout
-    android:id="@+id/calib_container"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:visibility="gone"
-    android:background="#000000" />
-</ScrollView>
+        android:text="📷 Camera — Tap to grant"
+        android:textSize="15sp"
+        android:textColor="#FFB800"
+        android:padding="16dp"
+        android:background="#0B1628"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/status_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🪟 Display Over Apps — Tap to grant"
+        android:textSize="15sp"
+        android:textColor="#FFB800"
+        android:padding="16dp"
+        android:background="#0B1628"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/status_accessibility"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="♿ Accessibility — Tap to grant"
+        android:textSize="15sp"
+        android:textColor="#FFB800"
+        android:padding="16dp"
+        android:background="#0B1628"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/btn_launch"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Grant Permissions and Launch"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:backgroundTint="#00C3FF"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/btn_stop"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:text="Stop EyeScroll"
+        android:textSize="14sp"
+        android:textColor="#D8EEFF"
+        android:backgroundTint="#22FFFFFF"
+        android:layout_marginBottom="24dp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="👆 Look UP = Previous Reel&#10;👇 Look DOWN = Next Reel&#10;😑 1 Blink = Pause/Play&#10;❤ 2 Blinks = Like&#10;🔔 3 Blinks = Subscribe"
+        android:textSize="14sp"
+        android:textColor="#8AAFC8"
+        android:padding="16dp"
+        android:background="#0B1628"/>
+
+</LinearLayout>
