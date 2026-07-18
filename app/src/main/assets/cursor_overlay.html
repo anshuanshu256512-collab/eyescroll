@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>EyeScroll Cursor</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+  width:100%;height:100%;
+  background:transparent !important;
+  overflow:hidden;
+  pointer-events:none;
+}
+
+/* Arrow cursor */
+#eye-cursor{
+  position:fixed;
+  top:0;left:0;
+  width:34px;height:44px;
+  pointer-events:none;
+  z-index:99999;
+  transform:translate3d(50vw,50vh,0);
+  margin-left:-2px;margin-top:-2px;
+}
+
+/* Status badge */
+#badge{
+  position:fixed;
+  top:8px;left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,195,255,0.15);
+  border:1px solid rgba(0,195,255,0.4);
+  color:rgba(0,195,255,0.9);
+  font-size:11px;
+  padding:3px 14px;
+  border-radius:20px;
+  pointer-events:none;
+  font-family:sans-serif;
+  white-space:nowrap;
+}
+
+/* Gesture toast */
+#toast{
+  position:fixed;
+  bottom:100px;left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,195,255,0.92);
+  color:#000;
+  font-size:18px;
+  font-weight:bold;
+  padding:10px 28px;
+  border-radius:50px;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.2s;
+  font-family:sans-serif;
+  white-space:nowrap;
+  z-index:99999;
+}
+
+/* Zone indicators */
+#zone-up{
+  position:fixed;
+  top:0;left:0;right:0;
+  height:28%;
+  border-bottom:2px solid rgba(0,195,255,0);
+  pointer-events:none;
+  transition:border-color 0.2s;
+}
+#zone-down{
+  position:fixed;
+  bottom:0;left:0;right:0;
+  height:28%;
+  border-top:2px solid rgba(0,195,255,0);
+  pointer-events:none;
+  transition:border-color 0.2s;
+}
+#zone-up.active{border-bottom-color:rgba(0,195,255,0.5);}
+#zone-down.active{border-top-color:rgba(0,195,255,0.5);}
+
+/* Stop button */
+#stop-btn{
+  position:fixed;
+  top:8px;right:8px;
+  background:rgba(255,50,50,0.9);
+  color:white;
+  border:none;
+  padding:8px 14px;
+  border-radius:20px;
+  font-size:13px;
+  font-weight:bold;
+  z-index:999999;
+  pointer-events:auto;
+  font-family:sans-serif;
+  cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- Zone indicators -->
+<div id="zone-up"></div>
+<div id="zone-down"></div>
+
+<!-- Arrow cursor SVG -->
+<svg id="eye-cursor" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0  0 0 0 0 0.76  0 0 0 0 1  0 0 0 0.9 0" result="col"/>
+      <feMerge>
+        <feMergeNode in="col"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z"
+    fill="rgba(0,0,0,0.5)"
+    transform="translate(1.5,2)"
+    filter="url(#glow)"/>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="white"/>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z"
+    fill="none"
+    stroke="rgba(0,195,255,0.85)"
+    stroke-width="1.6"
+    stroke-linejoin="round"/>
+</svg>
+
+<!-- Badge -->
+<div id="badge">ðŸ‘ EyeScroll Active</div>
+
+<!-- Stop button -->
+<button id="stop-btn" onclick="stopEyeScroll()">â–  Stop</button>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ANDROID BRIDGE
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var IS_ANDROID=(typeof window.EyeScroll!=='undefined');
+function bridge(m,a){
+  if(!IS_ANDROID)return;
+  try{ a!==undefined?window.EyeScroll[m](a):window.EyeScroll[m](); }catch(e){}
+}
+function stopEyeScroll(){ bridge('stopService'); }
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ONE EURO FILTER
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+function OEF(freq,mco,beta,dco){
+  var xp=null,dxp=0,tp=null;
+  function alpha(co){var r=2*Math.PI*co/freq;return r/(r+1);}
+  function lp(x,xpp,a){return a*x+(1-a)*xpp;}
+  return {
+    filter:function(x,t){
+      if(xp===null){xp=x;tp=t;return x;}
+      var dt=(t-tp)/1000;if(dt<=0)dt=1/freq;
+      var dx=(x-xp)/dt;
+      var edx=lp(dx,dxp,alpha(dco));
+      var co=mco+beta*Math.abs(edx);
+      var ex=lp(x,xp,alpha(co));
+      xp=ex;dxp=edx;tp=t;return ex;
+    },
+    reset:function(){xp=null;dxp=0;tp=null;}
+  };
+}
+var fX=OEF(30,0.5,0.07,1.0);
+var fY=OEF(30,0.5,0.07,1.0);
+var lastCX=null,lastCY=null,DEAD=4;
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BLINK DETECTION
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var EAR_TH=0.20,EAR_FR=2,BLINK_GAP=700,BLINK_MAX=400;
+var earC=0,blinkN=0,blinkT=null,eyeC=false,eyeCT=0;
+
+function earD(pts,a,b){
+  if(!pts[a]||!pts[b])return 0;
+  var dx=pts[a][0]-pts[b][0],dy=pts[a][1]-pts[b][1];
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function ear(pts,p1,p2,p3,p4,p5,p6){
+  var h=earD(pts,p1,p4);
+  if(h<0.001)return 1;
+  return(earD(pts,p2,p6)+earD(pts,p3,p5))/(2*h);
+}
+function processBlink(pts){
+  if(!pts||pts.length<387)return;
+  var l=ear(pts,133,159,158,145,144,33);
+  var r=ear(pts,362,386,385,374,373,263);
+  var e=(l+r)/2,now=Date.now();
+  if(e<EAR_TH){
+    earC++;
+    if(!eyeC&&earC>=EAR_FR){eyeC=true;eyeCT=now;}
+  } else {
+    if(eyeC){
+      if(now-eyeCT<BLINK_MAX){
+        blinkN++;
+        clearTimeout(blinkT);
+        blinkT=setTimeout(fireBlink,BLINK_GAP);
+      }
+      eyeC=false;
+    }
+    earC=0;
+  }
+}
+function fireBlink(){
+  var c=blinkN;blinkN=0;
+  if(c===1) sendGesture(3,'â¸ Pause/Play');
+  else if(c===2) sendGesture(4,'â¤ Like');
+  else if(c>=3) sendGesture(5,'ðŸ”” Subscribe');
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   GAZE ZONE
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var UP=0.28,DOWN=0.72,DWELL=600,SCD=1500;
+var cZone='centre',zT=0,zFired=false,lastS=0,zRT=null;
+var zoneUpEl,zoneDnEl;
+
+function processZone(x,y){
+  var H=window.innerHeight;
+  var z=y<H*UP?'up':y>H*DOWN?'down':'centre';
+  var now=Date.now();
+  if(z!==cZone){
+    clearTimeout(zRT);
+    cZone=z;zT=now;zFired=false;
+    zoneUpEl.classList.remove('active');
+    zoneDnEl.classList.remove('active');
+    if(z==='up')zoneUpEl.classList.add('active');
+    if(z==='down')zoneDnEl.classList.add('active');
+  }
+  if(!zFired&&z!=='centre'){
+    if(now-zT>=DWELL&&now-lastS>SCD){
+      zFired=true;lastS=now;
+      if(z==='up')sendGesture(2,'â¬† Prev Reel');
+      else sendGesture(1,'â¬‡ Next Reel');
+      zRT=setTimeout(function(){
+        cZone='centre';zFired=false;
+        zoneUpEl.classList.remove('active');
+        zoneDnEl.classList.remove('active');
+      },200);
+    }
+  }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   GESTURE + TOAST
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var GCD=1200,lastG=0,toastT;
+function sendGesture(code,label){
+  var now=Date.now();
+  if(now-lastG<GCD)return;
+  lastG=now;
+  var t=document.getElementById('toast');
+  t.textContent=label;t.style.opacity='1';
+  clearTimeout(toastT);
+  toastT=setTimeout(function(){t.style.opacity='0';},900);
+  bridge('onGesture',code);
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   CURSOR MOVEMENT
+   Called from Android Java via evaluateJavascript
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+window.moveCursor=function(x,y){
+  var now=Date.now();
+  var sx=fX.filter(x,now);
+  var sy=fY.filter(y,now);
+  var nx=Math.round(sx),ny=Math.round(sy);
+  if(lastCX!==null&&
+     Math.abs(nx-lastCX)<DEAD&&
+     Math.abs(ny-lastCY)<DEAD)return;
+  lastCX=nx;lastCY=ny;
+  var cx=Math.max(0,Math.min(window.innerWidth-1,nx));
+  var cy=Math.max(0,Math.min(window.innerHeight-1,ny));
+  document.getElementById('eye-cursor').style.transform=
+    'translate3d('+cx+'px,'+cy+'px,0)';
+  processZone(cx,cy);
+};
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BLINK TRIGGER
+   Called from Android Java
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+window.triggerBlink=function(earValue){
+  /* Accept EAR value from Java blink detector */
+  if(typeof earValue==='number'){
+    var now=Date.now();
+    if(earValue<EAR_TH){
+      earC++;
+      if(!eyeC&&earC>=EAR_FR){eyeC=true;eyeCT=now;}
+    } else {
+      if(eyeC){
+        if(now-eyeCT<BLINK_MAX){
+          blinkN++;
+          clearTimeout(blinkT);
+          blinkT=setTimeout(fireBlink,BLINK_GAP);
+        }
+        eyeC=false;
+      }
+      earC=0;
+    }
+  }
+};
+
+/* Init */
+window.addEventListener('load',function(){
+  zoneUpEl=document.getElementById('zone-up');
+  zoneDnEl=document.getElementById('zone-down');
+});
+</script>
+</body>
+</html>
