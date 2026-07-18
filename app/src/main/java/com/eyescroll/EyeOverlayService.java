@@ -3,7 +3,8 @@ import android.app.*;
 import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.os.*;
-import android.view.*;
+import android.view.View;
+import android.view.WindowManager;
 import android.webkit.*;
 import androidx.core.app.NotificationCompat;
 public class EyeOverlayService extends Service {
@@ -16,25 +17,36 @@ public class EyeOverlayService extends Service {
     private WebView wv;
     private long lastGesture=0;
     private static final long COOLDOWN=1200;
-    @Override public void onCreate(){super.onCreate();wm=(WindowManager)getSystemService(WINDOW_SERVICE);}
+    @Override public void onCreate(){
+        super.onCreate();
+        wm=(WindowManager)getSystemService(WINDOW_SERVICE);
+    }
     @Override public int onStartCommand(Intent i,int f,int id){
         if(i==null)return START_NOT_STICKY;
-        if(ACTION_START.equals(i.getAction())&&!running){startFg();createOverlay();running=true;}
-        else if(ACTION_STOP.equals(i.getAction())){teardown();}
+        if(ACTION_START.equals(i.getAction())&&!running){
+            startFg();
+            createOverlay();
+            running=true;
+        } else if(ACTION_STOP.equals(i.getAction())){
+            teardown();
+        }
         return START_NOT_STICKY;
     }
     @Override public IBinder onBind(Intent i){return null;}
     @Override public void onDestroy(){teardown();super.onDestroy();}
     private void startFg(){
         if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            NotificationChannel c=new NotificationChannel(CH_ID,"EyeScroll",NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel c=new NotificationChannel(
+                CH_ID,"EyeScroll",NotificationManager.IMPORTANCE_LOW);
             getSystemService(NotificationManager.class).createNotificationChannel(c);
         }
-        Intent si=new Intent(this,EyeOverlayService.class);si.setAction(ACTION_STOP);
-        PendingIntent pi=PendingIntent.getService(this,0,si,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        Intent si=new Intent(this,EyeOverlayService.class);
+        si.setAction(ACTION_STOP);
+        PendingIntent pi=PendingIntent.getService(this,0,si,
+            PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         startForeground(NID,new NotificationCompat.Builder(this,CH_ID)
             .setContentTitle("EyeScroll Active")
-            .setContentText("Eye tracking running - tap Stop to exit")
+            .setContentText("Eye tracking running")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .addAction(android.R.drawable.ic_delete,"Stop",pi)
             .setOngoing(true).build());
@@ -48,22 +60,16 @@ public class EyeOverlayService extends Service {
         ws.setAllowUniversalAccessFromFileURLs(true);
         ws.setDomStorageEnabled(true);
         wv.setBackgroundColor(0x00000000);
-        wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE,null);
         wv.addJavascriptInterface(new Bridge(),"EyeScroll");
         wv.setWebChromeClient(new WebChromeClient(){
-            @Override public void onPermissionRequest(PermissionRequest r){r.grant(r.getResources());}
+            @Override public void onPermissionRequest(PermissionRequest r){
+                r.grant(r.getResources());
+            }
         });
         int type=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:
             WindowManager.LayoutParams.TYPE_PHONE;
-        /*
-         * KEY FIX: FLAG_NOT_TOUCHABLE from the very START
-         * This means ALL touches pass through to YouTube/Instagram
-         * underneath. The overlay is invisible to touch at all times.
-         * User controls app below normally with fingers.
-         * Eye tracking ONLY controls the arrow cursor and triggers
-         * gestures via AccessibilityService.
-         */
         WindowManager.LayoutParams p=new WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -71,14 +77,13 @@ public class EyeOverlayService extends Service {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT);
         wm.addView(wv,p);
-        wv.setVisibility(android.view.View.VISIBILE);
-        wv.loadUrl("file:///android_asset/eyetracker.html#cursor-only");
+        wv.setVisibility(View.VISIBLE);
+        wv.loadUrl("file:///android_asset/eyetracker.html");
     }
-    private class Bridge {
+    private class Bridge{
         @JavascriptInterface public void onGesture(int code){
             long now=System.currentTimeMillis();
             if(now-lastGesture<COOLDOWN)return;
@@ -88,13 +93,23 @@ public class EyeOverlayService extends Service {
                 svc.performGesture(code);
             }
         }
-
         @JavascriptInterface public void onCalibrationDone(){
-    wv.post(()->wv.setVisibility(android.view.View.VISIBLE));
+            if(wv==null||wm==null)return;
+            wv.post(()->{
+                WindowManager.LayoutParams lp=
+                    (WindowManager.LayoutParams)wv.getLayoutParams();
+                lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                wm.updateViewLayout(wv,lp);
+            });
         }
-        
         @JavascriptInterface public void onCalibrationStart(){
-            /* Touch already transparent - calibration dots tapped via gaze */
+            if(wv==null||wm==null)return;
+            wv.post(()->{
+                WindowManager.LayoutParams lp=
+                    (WindowManager.LayoutParams)wv.getLayoutParams();
+                lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                wm.updateViewLayout(wv,lp);
+            });
         }
         @JavascriptInterface public void log(String m){
             android.util.Log.d("EyeScroll",m);
@@ -106,18 +121,16 @@ public class EyeOverlayService extends Service {
     private void teardown(){
         running=false;
         if(wv!=null){
-            wv.post(()->{
+            try{
                 wv.loadUrl("about:blank");
                 wv.destroy();
-                wv=null;
-            });
+            }catch(Exception e){}
+            wv=null;
         }
         if(wm!=null){
-            try{
-                if(wv!=null)wm.removeView(wv);
-            }catch(Exception e){}
+            try{wm.removeView(wv);}catch(Exception e){}
         }
         stopForeground(true);
         stopSelf();
     }
-        }
+}
