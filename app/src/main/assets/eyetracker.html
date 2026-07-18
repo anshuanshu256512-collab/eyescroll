@@ -1,2800 +1,544 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eye Cursor Control</title>
-
-  <!--
-    EXTERNAL LIBRARIES (not created by this project)
-    ─────────────────────────────────────────────────
-    1. WebGazer.js — Eye tracking via webcam
-       Brown University HCI Lab · BSD 2-Clause License
-       https://webgazer.cs.brown.edu/
-    2. Space Grotesk — Google Fonts
-       https://fonts.google.com/specimen/Space+Grotesk
-    NOTE: Script is loaded synchronously (no async/defer)
-    so `webgazer` global is guaranteed ready before any JS runs.
-  -->
-  <script src="https://cdn.jsdelivr.net/npm/webgazer@2.1.2/dist/webgazer.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-
-  <style>
-/* ═══════════════════════════════════════════════
-   DESIGN TOKEN
-═══════════════════════════════════════════════ */
-:root {
-  --bg:           #040d1a;
-  --bg2:          #071223;
-  --card:         #0b1628;
-  --card-border:  rgba(0, 195, 255, 0.16);
-  --card-shadow:  0 32px 90px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,195,255,0.06);
-
-  --cyan:         #00c3ff;
-  --cyan-dim:     rgba(0, 195, 255, 0.12);
-  --cyan-glow:    rgba(0, 195, 255, 0.25);
-  --cyan-ring:    rgba(0, 195, 255, 0.35);
-
-  --green:        #00dfa0;
-  --green-dim:    rgba(0, 223, 160, 0.12);
-  --red:          #ff3a5e;
-  --red-dim:      rgba(255, 58, 94, 0.12);
-  --amber:        #ffb800;
-  --amber-dim:    rgba(255, 184, 0, 0.12);
-
-  --text:         #d8eeff;
-  --text-sub:     #8aafc8;
-  --text-muted:   #4d7090;
-
-  --radius-card:  22px;
-  --radius-btn:   14px;
-}
-
-/* ═══════════════════════════════════════════════
-   RESET + BASE
-═══════════════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>EyeScroll</title>
+<script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+<style>
+/* â”€â”€ COMPLETE TRANSPARENT OVERLAY â”€â”€ */
+* { margin:0; padding:0; box-sizing:border-box; }
 
 html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  font-size: 16px;
+  width:100%; height:100%;
+  background:transparent !important;
+  overflow:hidden;
+  pointer-events:none;
 }
 
-/* ═══════════════════════════════════════════════
-   APP SHELL  (animated mesh background)
-═══════════════════════════════════════════════ */
-#app {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  isolation: isolate;
-}
-
-/* Subtle animated gradient orbs */
-#app::before, #app::after {
-  content: '';
-  position: fixed;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 0;
-  animation: orb-float 12s ease-in-out infinite alternate;
-}
-#app::before {
-  width: 60vw; height: 60vw;
-  top: -20vw; left: -10vw;
-  background: radial-gradient(circle, rgba(0,195,255,0.06) 0%, transparent 70%);
-}
-#app::after {
-  width: 50vw; height: 50vw;
-  bottom: -15vw; right: -10vw;
-  background: radial-gradient(circle, rgba(0,80,255,0.05) 0%, transparent 70%);
-  animation-delay: -6s;
-}
-@keyframes orb-float {
-  from { transform: scale(1) translate(0, 0); }
-  to   { transform: scale(1.2) translate(3vw, 2vw); }
-}
-
-/* ═══════════════════════════════════════════════
-   SCREEN SYSTEM
-   All screens start hidden (visibility:hidden is
-   inherited by position:fixed children too, so the
-   tracking controls cannot bleed through when the
-   tracking screen is not active).
-═══════════════════════════════════════════════ */
+/* All screens transparent */
 .screen {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  pointer-events: none;
-  /* hidden by default — overridden by .active / .enter / .leave */
-  visibility: hidden;
-  opacity: 0;
+  position:fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background:transparent !important;
+  pointer-events:none;
+  display:none;
 }
-.screen.active {
-  pointer-events: auto;
-  visibility: visible;
-  opacity: 1;
-}
-/* Entering and leaving screens must be visible so animations are seen */
-.screen.enter { visibility: visible; }
-.screen.leave { visibility: visible; pointer-events: none; }
+.screen.active { display:flex; flex-direction:column; align-items:center; justify-content:center; }
 
-/* Screen enter/leave animations */
-@keyframes screen-in  {
-  from { opacity: 0; transform: translateY(20px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0)    scale(1);    }
-}
-@keyframes screen-out {
-  from { opacity: 1; transform: translateY(0)     scale(1);    }
-  to   { opacity: 0; transform: translateY(-12px) scale(0.97); }
-}
-.screen.enter { animation: screen-in  0.4s cubic-bezier(0.22,1,0.36,1) both; }
-.screen.leave { animation: screen-out 0.3s ease both; }
-
-/* ═══════════════════════════════════════════════
-   CARD  (Welcome + Error share this)
-═══════════════════════════════════════════════ */
-.card {
-  position: relative;
-  z-index: 3;
-  width: min(480px, 94vw);
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: clamp(32px, 5vw, 48px) clamp(28px, 5vw, 44px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(20px, 3vw, 26px);
-  text-align: center;
-  box-shadow: var(--card-shadow);
-}
-
-/* ── Icon badge ── */
-.icon-badge {
-  flex-shrink: 0;
-  width: 76px; height: 76px;
-  border-radius: 20px;
-  background: var(--cyan-dim);
-  border: 1px solid var(--cyan-ring);
-  display: flex; align-items: center; justify-content: center;
-  position: relative;
-}
-.icon-badge::after {
-  content: '';
-  position: absolute;
-  inset: -14px;
-  background: radial-gradient(circle, rgba(0,195,255,0.2) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-}
-.icon-badge svg { position: relative; z-index: 1; }
-
-/* ── Card heading ── */
-.card h1 {
-  font-size: clamp(1.4rem, 3.5vw, 1.8rem);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-}
-
-/* ── Feature list ── */
-.feat-list {
-  width: 100%;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.feat-item {
-  display: flex;
-  gap: 13px;
-  align-items: flex-start;
-  font-size: 0.9rem;
-  color: var(--text-sub);
-  line-height: 1.6;
-}
-.feat-tick {
-  color: var(--cyan);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-/* ── Divider ── */
-.divider {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--card-border), transparent);
-}
-
-/* ── Tip box ── */
-.tip-box {
-  width: 100%;
-  background: var(--cyan-dim);
-  border: 1px solid var(--cyan-ring);
-  border-radius: 12px;
-  padding: 13px 16px;
-  font-size: 0.83rem;
-  color: var(--text-sub);
-  text-align: left;
-  line-height: 1.55;
-}
-.tip-box strong { color: var(--cyan); }
-
-/* ═══════════════════════════════════════════════
-   BUTTONS
-═══════════════════════════════════════════════ */
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  outline: none;
-  user-select: none;
-  transition: transform 0.12s ease, filter 0.12s ease;
-}
-button:hover  { filter: brightness(1.08); transform: scale(1.02); }
-button:active { transform: scale(0.97); }
-button:disabled { opacity: 0.45; pointer-events: none; }
-
-.btn-primary {
-  width: 100%;
-  padding: 17px 24px;
-  border-radius: var(--radius-btn);
-  background: var(--cyan);
-  color: #000;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  box-shadow: 0 0 32px var(--cyan-glow), 0 4px 16px rgba(0,0,0,0.3);
-}
-
-.btn-ghost {
-  width: 100%;
-  padding: 17px 24px;
-  border-radius: var(--radius-btn);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--card-border);
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 600;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-}
-
-.btn-sm {
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  display: flex; align-items: center; gap: 8px;
-  white-space: nowrap;
-}
-.btn-sm.ghost {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid var(--card-border);
-  color: var(--text);
-}
-.btn-sm.danger {
-  background: var(--red);
-  color: #fff;
-  box-shadow: 0 0 18px rgba(255,58,94,0.35);
-}
-
-/* ═══════════════════════════════════════════════
-   LOADING SCREEN
-═══════════════════════════════════════════════ */
-#loading-screen {
-  flex-direction: column;
-  gap: 24px;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.spinner-wrap { position: relative; width: 64px; height: 64px; }
-.spinner-ring {
-  position: absolute; inset: 0;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  border-top-color: var(--cyan);
-  animation: spin 0.9s linear infinite;
-}
-.spinner-ring.r2 {
-  inset: 10px;
-  border-top-color: transparent;
-  border-right-color: rgba(0,195,255,0.45);
-  animation-duration: 1.4s;
-  animation-direction: reverse;
-}
-.spinner-glow {
-  position: absolute;
-  inset: 20px;
-  border-radius: 50%;
-  background: var(--cyan-dim);
-  box-shadow: 0 0 16px var(--cyan-glow);
-  animation: pulse-glow 1.5s ease-in-out infinite alternate;
-}
-@keyframes pulse-glow {
-  from { opacity: 0.5; transform: scale(0.9); }
-  to   { opacity: 1;   transform: scale(1.1); }
-}
-.loading-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text);
-}
-.loading-sub {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  animation: blink-text 2s ease-in-out infinite alternate;
-}
-@keyframes blink-text {
-  from { opacity: 0.5; }
-  to   { opacity: 1; }
-}
-
-/* ═══════════════════════════════════════════════
-   PRE-CALIBRATION INSTRUCTION SCREEN
-═══════════════════════════════════════════════ */
-#precalib-screen {
-  flex-direction: column;
-  background: var(--bg);
-}
-
-/* Camera preview card shown in pre-calibration */
-.precalib-card {
-  position: relative;
-  z-index: 3;
-  width: min(520px, 95vw);
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  padding: clamp(28px, 4vw, 44px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  text-align: center;
-  box-shadow: var(--card-shadow);
-}
-.precalib-card h2 {
-  font-size: clamp(1.3rem, 3vw, 1.65rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/* Rule list in pre-calibration */
-.rule-list {
-  width: 100%;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.rule-item {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  font-size: 0.92rem;
-  color: var(--text-sub);
-  line-height: 1.55;
-}
-.rule-num {
-  flex-shrink: 0;
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  background: var(--cyan-dim);
-  border: 1px solid var(--cyan-ring);
-  color: var(--cyan);
-  font-size: 0.75rem;
-  font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-  margin-top: 1px;
-}
-
-/* Face status row */
-.face-status-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-.face-status-row.bad {
-  background: var(--amber-dim);
-  border: 1px solid rgba(255,184,0,0.3);
-  color: var(--amber);
-}
-.face-status-row.good {
-  background: var(--green-dim);
-  border: 1px solid rgba(0,223,160,0.3);
-  color: var(--green);
-}
-.face-status-dot {
-  width: 9px; height: 9px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-  animation: badge-blink 1s ease-in-out infinite;
-}
-.face-status-row.good .face-status-dot {
-  animation: none;
-}
-
-/* ═══════════════════════════════════════════════
-   CALIBRATION SCREEN
-═══════════════════════════════════════════════ */
+/* â”€â”€ CALIBRATION SCREEN â”€â”€ */
 #calib-screen {
-  background: var(--bg);
-  flex-direction: column;
+  background:rgba(0,0,0,0.85) !important;
+  pointer-events:auto;
 }
 
-/* ── Dot Host — positioned by JS ── */
-.dot-host {
-  position: absolute;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Smooth travel between calibration points */
-  transition: left 0.95s cubic-bezier(0.45, 0, 0.55, 1),
-              top  0.95s cubic-bezier(0.45, 0, 0.55, 1),
-              opacity 0.25s ease;
+/* Calibration dot */
+#dot-host {
+  position:fixed;
+  width:60px; height:60px;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  transition:left 0.8s ease, top 0.8s ease;
 }
-
-/* Disable transition when first placing the dot */
-.dot-host.no-transition {
-  transition: opacity 0.25s ease !important;
-}
-
-/* Three concentric pulse rings */
-@keyframes ring-out {
-  0%   { transform: scale(0.6);  opacity: 0.8; }
-  100% { transform: scale(3.0);  opacity: 0;   }
+.dot-core {
+  width:20px; height:20px;
+  background:#00C3FF;
+  border-radius:50%;
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 12px #00C3FF;
 }
 .dot-ring {
-  position: absolute;
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  background: var(--cyan);
-  animation: ring-out 1.5s ease-out infinite;
+  width:50px; height:50px;
+  border:2px solid rgba(0,195,255,0.5);
+  border-radius:50%;
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  animation:pulse 1.2s ease-in-out infinite;
 }
-.dot-ring.r2 { animation-delay: 0.38s; }
-.dot-ring.r3 { animation-delay: 0.76s; }
-
-/* Progress ring (SVG) */
-.dot-progress-svg {
-  position: absolute;
-  width: 84px; height: 84px;
-  transform: rotate(-90deg);
-  overflow: visible;
-}
-.dot-progress-track { fill: none; stroke: rgba(0,195,255,0.12); stroke-width: 3; }
-.dot-progress-fill  {
-  fill: none;
-  stroke: var(--cyan);
-  stroke-width: 3;
-  stroke-linecap: round;
-  /* circumference of r=38 = 238.76 */
-  stroke-dasharray: 238.76;
-  stroke-dashoffset: 238.76;
-  transition: stroke-dashoffset 0.32s linear;
-  filter: drop-shadow(0 0 5px var(--cyan));
+@keyframes pulse {
+  0%,100%{opacity:0.3;transform:translate(-50%,-50%) scale(1);}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.3);}
 }
 
-/* Core dot — larger for easier fixation */
-.dot-core {
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 22px var(--cyan), 0 0 48px rgba(0,195,255,0.55);
-  z-index: 2;
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
+/* Calib instructions */
+#calib-msg {
+  position:fixed;
+  bottom:80px; left:50%;
+  transform:translateX(-50%);
+  color:#D8EEFF;
+  font-family:sans-serif;
+  font-size:16px;
+  text-align:center;
+  background:rgba(0,0,0,0.6);
+  padding:12px 24px;
+  border-radius:20px;
+  pointer-events:none;
 }
-/* Tiny crosshair center — gives eyes a precise fixation target */
-.dot-core::before,
-.dot-core::after {
-  content: '';
-  position: absolute;
-  background: rgba(0,0,0,0.45);
-  border-radius: 1px;
-}
-.dot-core::before { width: 1.5px; height: 10px; }
-.dot-core::after  { width: 10px; height: 1.5px; }
-
-/* Instruction label (shown during dwell) */
-.dot-label {
-  position: absolute;
-  top: calc(100% + 28px);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.dot-look-text {
-  font-size: 0.8rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-.dot-countdown {
-  font-size: 2.8rem;
-  font-weight: 700;
-  color: var(--cyan);
-  line-height: 1;
-  text-shadow: 0 0 24px var(--cyan-glow);
+#calib-progress {
+  position:fixed;
+  bottom:40px; left:50%;
+  transform:translateX(-50%);
+  color:#00C3FF;
+  font-family:sans-serif;
+  font-size:13px;
+  pointer-events:none;
 }
 
-/* ── "Follow the dot" travel overlay ──
-   Covers the screen during dot movement, telling the user to track it.
-   Shown during travel, hidden during dwell recording. */
-#travel-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  z-index: 4;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-#travel-overlay.visible { opacity: 1; }
-.travel-text {
-  font-size: clamp(1.1rem, 3vw, 1.6rem);
-  font-weight: 600;
-  color: rgba(255,255,255,0.55);
-  letter-spacing: -0.01em;
-  text-align: center;
-}
-.travel-sub {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* ── Transition overlay ── */
-#calib-ok {
-  position: absolute;
-  inset: 0;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  z-index: 10;
-}
-@keyframes pop-in {
-  from { opacity: 0; transform: scale(0.8); }
-  to   { opacity: 1; transform: scale(1);   }
-}
-.ok-icon {
-  width: 80px; height: 80px;
-  border-radius: 50%;
-  background: var(--green-dim);
-  border: 1px solid rgba(0,223,160,0.3);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--green);
-  box-shadow: 0 0 40px rgba(0,223,160,0.25);
-  animation: pop-in 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
-}
-#calib-ok-msg {
-  font-size: 1.55rem;
-  font-weight: 700;
-  color: var(--text);
-  animation: pop-in 0.3s 0.08s cubic-bezier(0.34,1.56,0.64,1) both;
-}
-#calib-ok-sub {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  animation: pop-in 0.3s 0.15s cubic-bezier(0.34,1.56,0.64,1) both;
-}
-
-/* ── Progress footer ── */
-.calib-footer {
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  z-index: 5;
-}
-.calib-step-label {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-}
-.calib-bar-track {
-  width: 200px; height: 3px;
-  border-radius: 99px;
-  background: rgba(255,255,255,0.07);
-  overflow: hidden;
-}
-.calib-bar-fill {
-  height: 100%;
-  border-radius: 99px;
-  background: linear-gradient(90deg, rgba(0,195,255,0.5), var(--cyan));
-  box-shadow: 0 0 8px var(--cyan-glow);
-  transition: width 0.5s ease;
-}
-
-/* ── Face detection badge ── */
-#face-badge {
-  position: fixed;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 18px;
-  border-radius: 99px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 200;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-#face-badge.good {
-  background: var(--green-dim);
-  border: 1px solid rgba(0,223,160,0.3);
-  color: var(--green);
-  opacity: 0;
-}
-#face-badge.bad {
-  background: var(--amber-dim);
-  border: 1px solid rgba(255,184,0,0.3);
-  color: var(--amber);
-  opacity: 1;
-}
-#face-badge .badge-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: badge-blink 1s ease-in-out infinite;
-}
-@keyframes badge-blink { 50% { opacity: 0.3; } }
-
-/* ═══════════════════════════════════════════════
-   TRACKING SCREEN
-═══════════════════════════════════════════════ */
-#track-screen { background: var(--bg); }
-
-.track-controls {
-  position: fixed;
-  top: 22px; right: 22px;
-  display: flex; gap: 10px;
-  z-index: 100;
-}
-
-.track-hint {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: clamp(1.3rem, 3.5vw, 2.5rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: rgba(255,255,255,0.045);
-  text-align: center;
-  padding: 2rem;
-  pointer-events: none; user-select: none;
-}
-
-/* ── Eye arrow cursor ── */
-/*
-  Arrow SVG tip is at SVG coordinate (2,2).
-  margin-left:-2px / margin-top:-2px aligns tip to gaze point.
-  No CSS transition — the OEF already provides smooth output.
-  Adding a CSS transition on top creates double-lag: the cursor
-  lags behind the eye AND the transition lags behind the lag.
-*/
+/* â”€â”€ EYE CURSOR â”€â”€ */
 #eye-cursor {
-  position: fixed;
-  top: 0; left: 0;
-  pointer-events: none;
-  z-index: 9999;
-  will-change: transform;
-  transform: translate3d(50vw, 50vh, 0);
-  margin-left: -2px;
-  margin-top: -2px;
+  position:fixed;
+  top:0; left:0;
+  width:34px; height:44px;
+  pointer-events:none;
+  z-index:99999;
+  transform:translate3d(50vw,50vh,0);
+  margin-left:-2px;
+  margin-top:-2px;
+  display:none;
 }
 
-/* ── No-face warning overlay (tracking) ── */
-#track-face-warn {
-  position: fixed;
-  top: 22px; left: 50%;
-  transform: translateX(-50%);
-  background: var(--amber-dim);
-  border: 1px solid rgba(255,184,0,0.3);
-  border-radius: 99px;
-  padding: 8px 18px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--amber);
-  display: flex; align-items: center; gap: 8px;
-  z-index: 100;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.35s ease;
-}
-#track-face-warn.visible { opacity: 1; }
-
-/* ── Head pose deviation badge ──
-   Appears below the face warning when the user's head has
-   tilted significantly away from the calibration position. */
-#pose-badge {
-  position: fixed;
-  top: 68px; left: 50%;
-  transform: translateX(-50%);
-  border-radius: 99px;
-  padding: 7px 16px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  display: flex; align-items: center; gap: 8px;
-  z-index: 99;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s ease;
-  white-space: nowrap;
-}
-#pose-badge.pose-warn {
-  background: var(--amber-dim);
-  border: 1px solid rgba(255,184,0,0.25);
-  color: var(--amber);
-}
-#pose-badge.pose-bad {
-  background: var(--red-dim);
-  border: 1px solid rgba(255,58,94,0.3);
-  color: var(--red);
+/* â”€â”€ STATUS BADGE â”€â”€ */
+#status-badge {
+  position:fixed;
+  top:8px; left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,195,255,0.15);
+  border:1px solid rgba(0,195,255,0.4);
+  color:rgba(0,195,255,0.9);
+  font-size:11px;
+  padding:3px 14px;
+  border-radius:20px;
+  z-index:99998;
+  pointer-events:none;
+  font-family:sans-serif;
+  display:none;
 }
 
-/* ═══════════════════════════════════════════════
-   ERROR SCREEN
-═══════════════════════════════════════════════ */
-.err-badge {
-  width: 76px; height: 76px;
-  border-radius: 20px;
-  background: var(--red-dim);
-  border: 1px solid rgba(255,58,94,0.25);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--red);
-}
-#err-text {
-  font-size: 0.9rem;
-  color: var(--text-sub);
-  line-height: 1.65;
-  text-align: left;
-  width: 100%;
-  white-space: pre-wrap;
+/* â”€â”€ GESTURE TOAST â”€â”€ */
+#gesture-toast {
+  position:fixed;
+  bottom:100px; left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,195,255,0.92);
+  color:#000;
+  font-size:18px;
+  font-weight:bold;
+  padding:10px 28px;
+  border-radius:50px;
+  z-index:99999;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.2s;
+  font-family:sans-serif;
+  white-space:nowrap;
 }
 
-/* ═══════════════════════════════════════════════
-   WEBGAZER VIDEO OVERRIDE  (force correct position)
-═══════════════════════════════════════════════ */
+/* â”€â”€ STOP BUTTON â”€â”€ */
+#stop-btn {
+  position:fixed;
+  top:8px; right:8px;
+  background:rgba(255,50,50,0.9);
+  color:white;
+  border:none;
+  padding:8px 16px;
+  border-radius:20px;
+  font-size:13px;
+  font-weight:bold;
+  z-index:999999;
+  pointer-events:auto;
+  font-family:sans-serif;
+  cursor:pointer;
+  display:none;
+}
+
+/* â”€â”€ LOADING SCREEN â”€â”€ */
+#loading-screen {
+  background:rgba(4,13,26,0.95) !important;
+  pointer-events:auto;
+  color:#D8EEFF;
+  font-family:sans-serif;
+  text-align:center;
+  gap:16px;
+}
+#loading-screen h2 { color:#00C3FF; font-size:22px; }
+#loading-screen p { color:#8AAFC8; font-size:14px; }
+.spinner {
+  width:48px; height:48px;
+  border:3px solid rgba(0,195,255,0.2);
+  border-top-color:#00C3FF;
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin { to{transform:rotate(360deg);} }
+
+/* WebGazer overrides */
 #webgazerVideoContainer {
-  position: fixed   !important;
-  bottom: 22px      !important;
-  right:  22px      !important;
-  top:    auto      !important;
-  left:   auto      !important;
-  width:  160px     !important;
-  height: 120px     !important;
-  border-radius: 12px !important;
-  border: 1px solid var(--cyan-ring) !important;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,195,255,0.08) !important;
-  z-index: 60       !important;
-  overflow: hidden  !important;
-  transform: none   !important;
-  transition: none  !important;
+  position:fixed !important;
+  bottom:16px !important; right:16px !important;
+  top:auto !important; left:auto !important;
+  width:120px !important; height:90px !important;
+  border-radius:10px !important;
+  border:1px solid rgba(0,195,255,0.4) !important;
+  z-index:60 !important;
+  overflow:hidden !important;
+  transform:none !important;
 }
-/*
- * Hide the face overlay and feedback box VISUALLY but keep them in the DOM.
- * WebGazer's TFFacemesh pipeline draws to these canvases internally — removing
- * them or setting display:none breaks face detection. opacity:0 + pointer-events:none
- * hides them from the user without disrupting the detection pipeline.
- */
 #webgazerFaceOverlay,
 #webgazerFaceFeedbackBox {
-  opacity: 0 !important;
-  pointer-events: none !important;
+  opacity:0 !important;
+  pointer-events:none !important;
 }
 #webgazerVideoContainer video {
-  width: 100% !important; height: 100% !important;
-  object-fit: cover !important;
+  width:100% !important; height:100% !important;
+  object-fit:cover !important;
 }
-
-/* Warmup scanning animation shown in pre-calib */
-@keyframes scan-pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1;   }
-}
-.scanning-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
-  color: var(--cyan);
-  animation: scan-pulse 1.2s ease-in-out infinite;
-}
-.scan-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--cyan);
-}
-  </style>
+</style>
 </head>
 <body>
-<div id="app">
 
-  <!-- ══════════════════════ WELCOME ══════════════════════ -->
-  <div id="welcome-screen" class="screen active enter">
-    <div class="card">
+<!-- Loading screen -->
+<div id="loading-screen" class="screen active">
+  <div class="spinner"></div>
+  <h2>ðŸ‘ EyeScroll</h2>
+  <p id="loading-msg">Initialising cameraâ€¦</p>
+</div>
 
-      <div class="icon-badge">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
-             stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3.5"/>
-          <circle cx="12" cy="12" r="1.2" fill="var(--cyan)" stroke="none"/>
-        </svg>
-      </div>
-
-      <h1>Control the cursor&nbsp;with your eyes</h1>
-
-      <ul class="feat-list">
-        <li class="feat-item">
-          <span class="feat-tick">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </span>
-          Camera required — everything runs locally, nothing is uploaded
-        </li>
-        <li class="feat-item">
-          <span class="feat-tick">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </span>
-          Fast calibration — 9 dots, ~25 seconds. Tracks iris movement precisely
-        </li>
-        <li class="feat-item">
-          <span class="feat-tick">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </span>
-          3-axis head compensation — auto-corrects for tilt, nod &amp; turn even after calibration
-        </li>
-      </ul>
-
-      <div class="divider"></div>
-
-      <div class="tip-box">
-        <strong>Best results:</strong> Sit 50–70 cm from the screen in good, even lighting.
-        Avoid strong backlight (a bright window behind you hurts accuracy).
-      </div>
-
-      <button class="btn-primary" id="btn-start">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-        Begin Eye Tracking
-      </button>
-
-    </div>
-  </div><!-- #welcome-screen -->
-
-  <!-- ══════════════════════ LOADING ══════════════════════ -->
-  <div id="loading-screen" class="screen" style="flex-direction:column;gap:22px;">
-    <div class="spinner-wrap">
-      <div class="spinner-ring"></div>
-      <div class="spinner-ring r2"></div>
-      <div class="spinner-glow"></div>
-    </div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-      <p class="loading-title">Initializing eye tracker</p>
-      <p class="loading-sub" id="loading-sub">Requesting camera access…</p>
-    </div>
+<!-- Calibration screen -->
+<div id="calib-screen" class="screen">
+  <div id="dot-host">
+    <div class="dot-ring"></div>
+    <div class="dot-core"></div>
   </div>
+  <div id="calib-msg">Look at the dot and keep your gaze there</div>
+  <div id="calib-progress">Point 1 of 9</div>
+</div>
 
-  <!-- ══════════════════════ PRE-CALIBRATION ══════════════════════ -->
-  <div id="precalib-screen" class="screen" style="background:var(--bg);">
-    <div class="precalib-card">
+<!-- Eye cursor (shown during tracking) -->
+<svg id="eye-cursor" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0  0 0 0 0 0.76  0 0 0 0 1  0 0 0 0.9 0" result="col"/>
+      <feMerge><feMergeNode in="col"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="rgba(0,0,0,0.5)" transform="translate(1.5,2)" filter="url(#glow)"/>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="white"/>
+  <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="none" stroke="rgba(0,195,255,0.85)" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>
 
-      <h2>Calibration Rules</h2>
+<!-- Status badge -->
+<div id="status-badge">ðŸ‘ EyeScroll Active</div>
 
-      <div class="rule-list">
-        <div class="rule-item">
-          <span class="rule-num">1</span>
-          <span>Place your device flat or prop it so the <strong>camera faces your face directly</strong></span>
-        </div>
-        <div class="rule-item">
-          <span class="rule-num">2</span>
-          <span><strong>Keep your head completely still</strong> throughout — only your eyes should move</span>
-        </div>
-        <div class="rule-item">
-          <span class="rule-num">3</span>
-          <span>A dot will appear on screen. <strong>Look at its exact centre</strong> and keep your gaze there until it moves</span>
-        </div>
-        <div class="rule-item">
-          <span class="rule-num">4</span>
-          <span>When the dot slides to the next spot, <strong>follow it smoothly with your eyes</strong></span>
-        </div>
-        <div class="rule-item">
-          <span class="rule-num">5</span>
-          <span>Do 9 points in total — about <strong>25 seconds</strong></span>
-        </div>
-      </div>
+<!-- Stop button -->
+<button id="stop-btn" onclick="stopEyeScroll()">â–  Stop</button>
 
-      <div class="divider"></div>
-
-      <!-- Live face-detected indicator -->
-      <div class="face-status-row bad" id="precalib-face-status">
-        <span class="face-status-dot"></span>
-        <span id="precalib-face-text">Initialising camera — please wait…</span>
-      </div>
-
-      <!-- Warmup scanning indicator (shown for first 2.5 s) -->
-      <div class="scanning-indicator" id="precalib-warmup">
-        <span class="scan-dot"></span>
-        <span>Loading face model — keep your face in view</span>
-      </div>
-
-      <button class="btn-primary" id="btn-start-calib" disabled>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 8 12 12 14 14"/>
-        </svg>
-        <span id="btn-start-calib-txt">Waiting for face…</span>
-      </button>
-
-    </div>
-  </div><!-- #precalib-screen -->
-
-  <!-- ══════════════════════ CALIBRATION ══════════════════════ -->
-  <div id="calib-screen" class="screen" style="background:var(--bg);">
-
-    <!-- Face detection badge (shown/hidden by JS during calibration) -->
-    <div id="face-badge" class="bad">
-      <span class="badge-dot"></span>
-      <span id="face-badge-text">Looking for your face…</span>
-    </div>
-
-    <!-- "Follow the dot" travel overlay -->
-    <div id="travel-overlay">
-      <p class="travel-text">Follow the dot with your eyes</p>
-      <p class="travel-sub">Keep your head still</p>
-    </div>
-
-    <!-- Dot host (JS moves left/top to each calibration point) -->
-    <div id="dot-host" class="dot-host no-transition">
-      <div class="dot-ring"></div>
-      <div class="dot-ring r2"></div>
-      <div class="dot-ring r3"></div>
-
-      <!-- SVG progress ring -->
-      <svg class="dot-progress-svg" viewBox="0 0 80 80">
-        <circle class="dot-progress-track" cx="40" cy="40" r="38"/>
-        <circle class="dot-progress-fill"  cx="40" cy="40" r="38" id="prog-circle"/>
-      </svg>
-
-      <div class="dot-core"></div>
-
-      <div class="dot-label">
-        <span class="dot-look-text">Look at the centre</span>
-        <span class="dot-countdown" id="dot-count">5</span>
-      </div>
-    </div>
-
-    <!-- Transition overlay after each point -->
-    <div id="calib-ok" style="display:none;">
-      <div class="ok-icon">
-        <svg width="38" height="38" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      </div>
-      <p id="calib-ok-msg">Next point</p>
-      <p id="calib-ok-sub" style="font-size:0.9rem;color:var(--text-muted);">Moving dot — follow it with your eyes</p>
-    </div>
-
-    <!-- Footer progress -->
-    <div class="calib-footer">
-      <span class="calib-step-label" id="calib-step-label">Point 1 of 9</span>
-      <div class="calib-bar-track">
-        <div class="calib-bar-fill" id="calib-bar" style="width:0%"></div>
-      </div>
-    </div>
-
-  </div><!-- #calib-screen -->
-
-  <!-- ══════════════════════ TRACKING ══════════════════════ -->
-  <div id="track-screen" class="screen" style="background:var(--bg);">
-
-    <div class="track-controls">
-      <button class="btn-sm ghost" id="btn-recalib">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
-        </svg>
-        Recalibrate
-      </button>
-      <button class="btn-sm danger" id="btn-stop">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-        </svg>
-        Stop
-      </button>
-    </div>
-
-    <!-- No-face warning -->
-    <div id="track-face-warn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-        <line x1="12" y1="9" x2="12" y2="13"/>
-        <line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-      Face not detected — adjust your position or lighting
-    </div>
-
-    <!-- Head pose deviation badge -->
-    <div id="pose-badge" class="pose-badge">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12.5"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span id="pose-badge-text">Head moved</span>
-    </div>
-
-    <p class="track-hint">Look around to move the cursor</p>
-
-    <!--
-      Arrow cursor — tip of arrow is at SVG (2,2).
-      Div is translated to gaze coord; margin -2px/-2px aligns tip.
-    -->
-    <div id="eye-cursor">
-      <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="arrowGlow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
-            <feColorMatrix in="blur" type="matrix"
-              values="0 0 0 0 0  0 0 0 0 0.76  0 0 0 0 1  0 0 0 0.9 0" result="colored"/>
-            <feMerge><feMergeNode in="colored"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <!-- Drop shadow -->
-        <path d="M2 2 L14 38 L19 23 L32 18 Z"
-              fill="rgba(0,0,0,0.5)"
-              transform="translate(1.5,2)"
-              filter="url(#arrowGlow)"/>
-        <!-- White fill -->
-        <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="white"/>
-        <!-- Cyan outline -->
-        <path d="M2 2 L14 38 L19 23 L32 18 Z"
-              fill="none"
-              stroke="rgba(0,195,255,0.85)"
-              stroke-width="1.6"
-              stroke-linejoin="round"/>
-      </svg>
-    </div>
-
-  </div><!-- #track-screen -->
-
-  <!-- ══════════════════════ ERROR ══════════════════════ -->
-  <div id="error-screen" class="screen">
-    <div class="card">
-      <div class="err-badge">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8"  x2="12" y2="12.5"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-      </div>
-      <h1>Could not start</h1>
-      <p id="err-text">An error occurred.</p>
-      <button class="btn-ghost" id="btn-retry">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
-        </svg>
-        Try Again
-      </button>
-    </div>
-  </div>
-
-</div><!-- #app -->
+<!-- Gesture toast -->
+<div id="gesture-toast"></div>
 
 <script>
-/* ════════════════════════════════════════════════════════
-   EYE CURSOR CONTROL — standalone implementation
-   External dependency: WebGazer.js (Brown University)
-   ════════════════════════════════════════════════════════
-
-   Architecture:
-   ─ One Euro Filter for X and Y gaze coordinates
-     (industry-standard adaptive smoothing for pointer devices)
-   ─ 9-point calibration with animated dot travel between points
-   ─ Pre-calibration instruction + live face check screen
-   ─ MutationObserver to style WebGazer's injected video element
-   ─ Face-lost detection with user feedback
-   ─ Full cleanup on stop/recalibrate to prevent state leakage
-
-   IMPORTANT — WebGazer init order:
-   begin() must be called first. All showVideo(), setRegression(),
-   setGazeListener() etc. are called ONLY AFTER begin() resolves.
-   Calling them before begin() corrupts internal state → TypeError.
-*/
-(function () {
 'use strict';
 
-/* ────────────────────────────────────────────────────────
-   ONE EURO FILTER
-   Reference: Géry Casiez et al., CHI 2012
-   https://cristal.univ-lille.fr/~casiez/1euro/
-
-   Parameters tuned for webcam gaze data (~30 Hz):
-     freq      = 30    (camera frame rate)
-     minCutoff = 0.5   (lower = smoother at rest, kills idle vibration)
-     beta      = 0.07  (higher = snappier on deliberate fast eye movement)
-     dCutoff   = 1.0   (derivative low-pass cutoff)
-
-   Key insight: vibration at rest is caused by high minCutoff letting
-   high-frequency noise through when the eye is still. Lowering it
-   suppresses that noise. Higher beta compensates so fast intentional
-   saccades still feel immediate and don't lag.
-──────────────────────────────────────────────────────── */
-function makeOEF(freq, minCutoff, beta, dCutoff) {
-  var TWO_PI = 6.283185307;
-  var xHat   = null;
-  var dxHat  = 0;
-
-  function alpha(cutoff) {
-    var te  = 1.0 / freq;
-    var tau = 1.0 / (TWO_PI * cutoff);
-    return 1.0 / (1.0 + tau / te);
-  }
-
-  return {
-    filter: function (x) {
-      if (xHat === null) { xHat = x; return x; }
-      var dx   = (x - xHat) * freq;
-      var aD   = alpha(dCutoff);
-      dxHat    = aD * dx + (1.0 - aD) * dxHat;
-      var cutoff = minCutoff + beta * Math.abs(dxHat);
-      var a    = alpha(cutoff);
-      xHat     = a * x + (1.0 - a) * xHat;
-      return xHat;
-    },
-    reset: function () { xHat = null; dxHat = 0; }
-  };
-}
-
-function makeGazeFilter() {
-  return {
-    fx: makeOEF(30, 0.5, 0.07, 1.0),
-    fy: makeOEF(30, 0.5, 0.07, 1.0),
-    reset: function () { this.fx.reset(); this.fy.reset(); },
-    apply: function (x, y) {
-      return { x: this.fx.filter(x), y: this.fy.filter(y) };
-    }
-  };
-}
-
-/* ────────────────────────────────────────────────────────
-   CALIBRATION GRID
-   9 points in a 3×3 layout.
-   Kept at 8–92 % so dots appear near the edges without being
-   clipped on small screens. Sequence goes: corners first (where
-   eye movement is largest), then edges, then centre — giving the
-   regression the widest possible coverage from the start.
-──────────────────────────────────────────────────────── */
-var CALIB_POINTS = [
-  /* Corners first — widest eye displacement → best regression base */
-  { xp: 10, yp: 10 },
-  { xp: 90, yp: 10 },
-  { xp: 10, yp: 90 },
-  { xp: 90, yp: 90 },
-  /* Edge midpoints — fill out the boundary */
-  { xp: 50, yp: 10 },
-  { xp: 50, yp: 90 },
-  { xp: 10, yp: 50 },
-  { xp: 90, yp: 50 },
-  /* Centre — anchor the regression */
-  { xp: 50, yp: 50 }
-];
-var TOTAL_POINTS       = CALIB_POINTS.length;  /* 9                              */
-var TRAVEL_MS          = 700;   /* ms for dot to slide to next position           */
-var DWELL_MS           = 2500;  /* ms to stare at each dot (reduced for speed)    */
-var FIRST_RECORD_WAIT  = 600;   /* ms before first sample (let eyes settle)       */
-var RECORD_INTERVAL    = 180;   /* ms between samples during dwell (~10/point)    */
-var CIRC               = 238.76; /* circumference r=38 progress circle            */
-
-/* ────────────────────────────────────────────────────────
-   DOM REFS
-──────────────────────────────────────────────────────── */
-var $screens = {
-  welcome:   document.getElementById('welcome-screen'),
-  loading:   document.getElementById('loading-screen'),
-  precalib:  document.getElementById('precalib-screen'),
-  calib:     document.getElementById('calib-screen'),
-  tracking:  document.getElementById('track-screen'),
-  error:     document.getElementById('error-screen')
-};
-var $loadingSub        = document.getElementById('loading-sub');
-var $dotHost           = document.getElementById('dot-host');
-var $dotCount          = document.getElementById('dot-count');
-var $progCircle        = document.getElementById('prog-circle');
-var $calibOk           = document.getElementById('calib-ok');
-var $calibOkMsg        = document.getElementById('calib-ok-msg');
-var $calibOkSub        = document.getElementById('calib-ok-sub');
-var $calibLabel        = document.getElementById('calib-step-label');
-var $calibBar          = document.getElementById('calib-bar');
-var $faceBadge         = document.getElementById('face-badge');
-var $faceBadgeTxt      = document.getElementById('face-badge-text');
-var $travelOverlay     = document.getElementById('travel-overlay');
-var $trackFaceWarn     = document.getElementById('track-face-warn');
-var $eyeCursor         = document.getElementById('eye-cursor');
-var $errText           = document.getElementById('err-text');
-var $precalibFace      = document.getElementById('precalib-face-status');
-var $precalibFaceTxt   = document.getElementById('precalib-face-text');
-var $precalibWarmup    = document.getElementById('precalib-warmup');
-var $btnStartCalib     = document.getElementById('btn-start-calib');
-var $btnStartCalibTxt  = document.getElementById('btn-start-calib-txt');
-
-/* ────────────────────────────────────────────────────────
-   STATE
-──────────────────────────────────────────────────────── */
-var currentScreen  = 'welcome';
-var calibStep      = 0;
-var calibTimers    = [];
-var videoObserver  = null;
-var gazeFilter     = makeGazeFilter();
-var nullCount      = 0;
-var NULL_WARN_THRESHOLD = 20;  /* ~0.67 s at 30 fps                 */
-var DEAD_PX = 4;               /* pixels — ignore movement smaller than this */
-
-/* Track previous dot position for animated travel */
-var prevDotPx = null;
-var prevDotPy = null;
-
-/* Last rendered cursor position for dead-zone check */
-var lastCursorX = null;
-var lastCursorY = null;
-
-/* Pre-calibration face status */
-var precalibFaceOk        = false;
-var precalibFaceStreaking  = false;  /* true once a contiguous face-present run begins */
-var precalibFaceTimer     = null;
-
-/* ── Head pose compensation state ── */
-var devGamma      = 0;    /* device left-right tilt (degrees, from deviceorientation) */
-var devBeta       = 0;    /* device front-back tilt (degrees) */
-var trackerRoll   = null; /* roll angle in radians from face mesh, or null */
-var trackerYaw    = null; /* yaw proxy (signed, normalised) from eye span, or null */
-var trackerEyeSpan = null;/* current inter-eye pixel distance from face mesh */
-var calibGamma    = [];   /* gamma samples collected during calibration   */
-var calibBeta     = [];   /* beta  samples collected during calibration   */
-var calibRoll     = [];   /* tracker roll samples during calibration      */
-var calibEyeSpanSamples = []; /* eye span samples for yaw baseline       */
-var calibEyeSpan  = null; /* median inter-eye pixel distance at calibration */
-var poseBaseline  = null; /* finalised after calibration                  */
-var poseActive    = false;
-var poseBadgeHideTimer = null;
-var poseTrackingInited = false;   /* guard: only set up once per page load */
-var poseOrientHandler  = null;    /* stored so we can remove it on teardown */
-
-/* DOM refs for pose badge */
-var $poseBadge    = document.getElementById('pose-badge');
-var $poseBadgeTxt = document.getElementById('pose-badge-text');
-
-/* ════════════════════════════════════════════════════════
-   HEAD POSE COMPENSATION  (v2 — full 3-axis + adaptive re-baseline)
-   ════════════════════════════════════════════════════════
-
-   WebGazer's ridge regression maps eye-patch APPEARANCE
-   (pixel features) to screen (x, y).  When the head moves
-   or tilts, the patches look different even for the same
-   gaze direction, so the regression output drifts.
-
-   This version adds THREE corrections (roll, pitch, yaw) PLUS
-   an adaptive re-baseline that continuously updates the reference
-   pose so the cursor regains control even after a head angle change.
-
-     1. Roll  — counter-rotate gaze around screen centre.
-                Handles head tilt left/right.
-     2. Pitch — shift gaze vertically.
-                Handles head nod up/down.
-     3. Yaw   — shift gaze horizontally.
-                Handles head turning left/right (most common on mobile).
-                Derived from the inter-eye distance in video pixels:
-                when the head turns, the eye-span width shrinks ∝ cos(yaw).
-
-   Adaptive re-baseline:
-     After calibration is complete, we track a "pose smoothed" value
-     of the current head orientation (EWMA, τ = 4 s).  When the
-     smoothed pose stabilises far from the original baseline, we
-     BLEND the baseline towards the new stable position.  This means
-     that if the user settles at a new angle, the cursor gradually
-     self-corrects without requiring a full recalibrate.
-
-   Data sources (best-available):
-     a) WebGazer TFFacemesh landmarks — 468 points in video-px space.
-        roll  = atan2(dy, dx) of the outer eye corner line (pts 33, 263).
-        yaw   = derived from inter-eye pixel distance vs calibration dist.
-        pitch = face-mesh nose-tip vertical position (pt 1) relative to
-                mid-eye-centre (midpoint of 33 and 263).
-     b) Device Orientation API — fallback for roll/pitch when landmarks
-        are unavailable (phone held in hand so tilt = head tilt).
-════════════════════════════════════════════════════════ */
-
-/* ── Adaptive re-baseline state ── */
-var adaptRollSmooth  = null;   /* EWMA of trackerRoll during tracking          */
-var adaptBetaSmooth  = null;   /* EWMA of devBeta  during tracking             */
-var adaptGammaSmooth = null;   /* EWMA of devGamma during tracking             */
-var adaptYawSmooth   = null;   /* EWMA of trackerYaw  during tracking          */
-var ADAPT_ALPHA      = 0.02;   /* EWMA smoothing — τ≈1.6s at 30fps, slow drift */
-var ADAPT_BLEND      = 0.015;  /* How fast baseline drifts toward stable pose  */
-var ADAPT_THRESH_ROLL  = 0.08; /* rad — start blending above this Δroll        */
-var ADAPT_THRESH_PITCH = 4;    /* deg — start blending above this Δpitch       */
-var ADAPT_THRESH_YAW   = 0.06; /* normalised units                             */
-
-/* Calibration inter-eye span (video px) for yaw reference */
-var calibEyeSpan = null;
-
-function setupPoseTracking() {
-  /* One-time init guard — safe to call on every startSession() */
-  if (poseTrackingInited) return;
-  poseTrackingInited = true;
-
-  /* ── Device orientation ── */
-  poseOrientHandler = function (e) {
-    if (e.gamma !== null && e.gamma !== undefined) devGamma = e.gamma;
-    if (e.beta  !== null && e.beta  !== undefined) devBeta  = e.beta;
-  };
-
-  if (typeof DeviceOrientationEvent !== 'undefined') {
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      /* iOS 13+ */
-      DeviceOrientationEvent.requestPermission()
-        .then(function (s) {
-          if (s === 'granted') {
-            window.addEventListener('deviceorientation', poseOrientHandler, true);
-          }
-        })
-        .catch(function () {});
-    } else {
-      window.addEventListener('deviceorientation', poseOrientHandler, true);
-    }
-  }
-
-  /* ── Tracker face-mesh polling ── (80 ms — ~12 fps, cheap) */
-  (function pollTracker() {
-    if (currentScreen === 'calib' || currentScreen === 'tracking') {
-      var info = getTrackerPose();
-      if (info !== null) {
-        trackerRoll = info.roll;
-        trackerYaw  = info.yaw;
-        trackerEyeSpan = info.eyeSpan;
-      } else {
-        trackerRoll = null;
-        trackerYaw  = null;
-        trackerEyeSpan = null;
-      }
-    }
-    setTimeout(pollTracker, 80);
-  })();
-}
-
-/*
- * Extract roll, yaw proxy, and eye span from WebGazer's TFFacemesh.
- * Landmarks (video-pixel space, 468 points):
- *   33  = left  eye outer corner
- *   263 = right eye outer corner
- *   1   = nose tip (for pitch cross-check)
- * Returns { roll, yaw, eyeSpan } or null.
- *
- * YAW PROXY: inter-eye pixel distance / calibration baseline distance.
- * When head turns left/right, this ratio shrinks: ratio ≈ cos(yaw_angle).
- * We use (1 - ratio) as a signed shift proportional to yaw deviation.
- * Sign comes from which corner is "higher" (y-axis) — left vs right turn.
- */
-function getTrackerPose() {
-  var w = wg();
-  if (!w) return null;
-
-  var tracker = null;
-  try { tracker = w.getTracker(); } catch (e) { return null; }
-  if (!tracker) return null;
-
-  var pos = null;
-  try { pos = tracker.positions; } catch (e) {}
-  if (!pos || pos.length < 264) return null;
-
-  var L = pos[33],  R = pos[263];
-  if (!L || !R || L.length < 2 || R.length < 2) return null;
-
-  var dx = R[0] - L[0];
-  var dy = R[1] - L[1];
-  var roll    = Math.atan2(dy, dx);
-  var eyeSpan = Math.sqrt(dx * dx + dy * dy);
-
-  /* Yaw proxy: signed normalised deviation from calibration span */
-  var yaw = 0;
-  if (calibEyeSpan && calibEyeSpan > 10) {
-    /* ratio < 1 when head turned, > 1 on very frontal angle */
-    var ratio = eyeSpan / calibEyeSpan;
-    /* clamp ratio to sane range */
-    ratio = Math.max(0.4, Math.min(1.3, ratio));
-    /*
-     * Sign: if L.y > R.y the left corner is lower, head turned right → +yaw.
-     * Use roll sign as proxy for yaw direction.
-     */
-    var yawMag = 1.0 - ratio;  /* ~0 when frontal, grows with turn angle */
-    yaw = (roll >= 0 ? 1 : -1) * yawMag;
-  }
-
-  return { roll: roll, yaw: yaw, eyeSpan: eyeSpan };
-}
-
-/* Snapshot the current pose into the calibration sample arrays */
-function collectPoseSample() {
-  calibGamma.push(devGamma);
-  calibBeta.push(devBeta);
-  if (trackerRoll !== null) calibRoll.push(trackerRoll);
-  /* Accumulate eye span for yaw baseline */
-  if (trackerEyeSpan !== null && trackerEyeSpan > 10) calibEyeSpanSamples.push(trackerEyeSpan);
-}
-
-function medianOf(arr) {
-  if (!arr.length) return 0;
-  var s = arr.slice().sort(function (a, b) { return a - b; });
-  var m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
-/* Lock in the calibration baseline */
-function finalizeBaseline() {
-  /* Set calibration eye span for yaw reference */
-  if (calibEyeSpanSamples.length > 3) {
-    calibEyeSpan = medianOf(calibEyeSpanSamples);
-  }
-
-  poseBaseline = {
-    gamma      : medianOf(calibGamma),
-    beta       : medianOf(calibBeta),
-    roll       : calibRoll.length ? medianOf(calibRoll) : null,
-    hasTracker : calibRoll.length > 3
-  };
-  poseActive = true;
-
-  /* Reset adaptive smoothers to calibration values */
-  adaptRollSmooth  = poseBaseline.roll;
-  adaptBetaSmooth  = poseBaseline.beta;
-  adaptGammaSmooth = poseBaseline.gamma;
-  adaptYawSmooth   = 0;
-
-  /* Clear sample buffers */
-  calibGamma = []; calibBeta = []; calibRoll = [];
-  calibEyeSpanSamples = [];
-  console.log('[HeadPose] Baseline:', JSON.stringify(poseBaseline), 'eyeSpan:', calibEyeSpan);
-}
-
-/*
- * Adaptive re-baseline update — call every gaze frame during tracking.
- * Smooths the current pose with a long EWMA (slow drift tracker).
- * When the smoothed pose has been stably far from the baseline for long
- * enough, gently blend the baseline toward the new position so the
- * correction converges to zero and the regression re-centres.
- */
-function updateAdaptiveBaseline() {
-  if (!poseActive || !poseBaseline) return;
-
-  /* ── Update EWMA smoothers ── */
-  if (adaptGammaSmooth === null) adaptGammaSmooth = devGamma;
-  if (adaptBetaSmooth  === null) adaptBetaSmooth  = devBeta;
-  adaptGammaSmooth += ADAPT_ALPHA * (devGamma - adaptGammaSmooth);
-  adaptBetaSmooth  += ADAPT_ALPHA * (devBeta  - adaptBetaSmooth);
-
-  if (poseBaseline.hasTracker && trackerRoll !== null) {
-    if (adaptRollSmooth === null) adaptRollSmooth = trackerRoll;
-    adaptRollSmooth += ADAPT_ALPHA * (trackerRoll - adaptRollSmooth);
-  }
-  if (trackerYaw !== null) {
-    if (adaptYawSmooth === null) adaptYawSmooth = 0;
-    adaptYawSmooth += ADAPT_ALPHA * (trackerYaw - adaptYawSmooth);
-  }
-
-  /* ── Compute current deviations from baseline ── */
-  var dRoll = poseBaseline.hasTracker && adaptRollSmooth !== null
-    ? Math.abs(adaptRollSmooth - poseBaseline.roll) : 0;
-  var dPitch = Math.abs(adaptBetaSmooth - poseBaseline.beta);
-  var dYaw   = adaptYawSmooth !== null ? Math.abs(adaptYawSmooth) : 0;
-
-  /*
-   * Blend baseline toward smoothed pose when the user has settled at a
-   * new head angle.  ADAPT_BLEND controls how fast: at 0.015 per frame
-   * at ~30fps, a 20° shift fully re-centres in ~40 s — slow enough not
-   * to feel broken during normal use, fast enough to self-heal.
-   */
-  if (dRoll > ADAPT_THRESH_ROLL && poseBaseline.hasTracker && adaptRollSmooth !== null) {
-    poseBaseline.roll += ADAPT_BLEND * (adaptRollSmooth - poseBaseline.roll);
-  }
-  if (dPitch > ADAPT_THRESH_PITCH) {
-    poseBaseline.beta  += ADAPT_BLEND * (adaptBetaSmooth  - poseBaseline.beta);
-    poseBaseline.gamma += ADAPT_BLEND * (adaptGammaSmooth - poseBaseline.gamma);
-  }
-  /* Update calibEyeSpan baseline for yaw when user is relatively frontal */
-  if (dYaw < ADAPT_THRESH_YAW && trackerEyeSpan && trackerEyeSpan > 10 && calibEyeSpan) {
-    calibEyeSpan += ADAPT_BLEND * (trackerEyeSpan - calibEyeSpan);
-  }
-}
-
-/*
- * Apply full 3-axis head-pose correction to a raw WebGazer (x, y).
- *
- * 1. Roll correction  — counter-rotate by −Δroll.
- * 2. Pitch correction — shift gaze vertically by ΔbetaCoeff.
- * 3. Yaw correction   — shift gaze horizontally by −Δyaw * yawCoeff.
- *    When the head turns right, the regression sees eye patches shifted
- *    leftward, causing the cursor to drift left.  We compensate right.
- */
-function applyPoseCorrection(x, y) {
-  if (!poseActive || !poseBaseline) return { x: x, y: y };
-
-  /* Update adaptive baseline every frame */
-  updateAdaptiveBaseline();
-
-  var W = window.innerWidth,  H = window.innerHeight;
-  var Cx = W / 2,             Cy = H / 2;
-
-  /* ─── 1. Roll ─── */
-  var deltaRoll = 0;
-  if (poseBaseline.hasTracker && trackerRoll !== null) {
-    deltaRoll = trackerRoll - poseBaseline.roll;
-  } else {
-    deltaRoll = (devGamma - poseBaseline.gamma) * Math.PI / 180;
-  }
-  var MAX_ROLL = Math.PI / 4;  /* clamp ±45° */
-  deltaRoll = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, deltaRoll));
-
-  var cosR = Math.cos(-deltaRoll);
-  var sinR = Math.sin(-deltaRoll);
-  var rx   = x - Cx, ry = y - Cy;
-  var corrX = rx * cosR - ry * sinR + Cx;
-  var corrY = rx * sinR + ry * cosR + Cy;
-
-  /* ─── 2. Pitch ─── */
-  var deltaBeta = devBeta - poseBaseline.beta;
-  deltaBeta = Math.max(-30, Math.min(30, deltaBeta));
-  corrY += deltaBeta * (H / 90) * 0.40;  /* slightly stronger than before */
-
-  /* ─── 3. Yaw ─── */
-  /*
-   * trackerYaw is (1 - eyeSpan/calibEyeSpan) with sign.
-   * Empirically a yaw shift of 0.1 (ratio) ≈ 10-15° head turn
-   * causes ~15% of screen width drift, so coefficient ≈ 1.5W.
-   */
-  if (trackerYaw !== null) {
-    var deltaYaw = trackerYaw;  /* signed: >0 head right → cursor drifts left */
-    deltaYaw = Math.max(-0.5, Math.min(0.5, deltaYaw));
-    corrX -= deltaYaw * W * 1.4;
-  }
-
-  return { x: corrX, y: corrY };
-}
-
-/* Show / hide the head-pose deviation badge on the tracking screen */
-function updatePoseBadge() {
-  if (!$poseBadge || !poseBaseline) return;
-
-  var rollDeg;
-  if (poseBaseline.hasTracker && trackerRoll !== null) {
-    rollDeg = Math.abs((trackerRoll - poseBaseline.roll) * 180 / Math.PI);
-  } else {
-    rollDeg = Math.abs(devGamma - poseBaseline.gamma);
-  }
-  var pitchDev = Math.abs(devBeta - poseBaseline.beta) * 0.5;
-  var yawDev   = trackerYaw !== null ? Math.abs(trackerYaw) * 60 : 0; /* approx degrees */
-  var maxDev   = Math.max(rollDeg, pitchDev, yawDev);
-
-  clearTimeout(poseBadgeHideTimer);
-
-  if (maxDev > 22) {
-    $poseBadge.className = 'pose-badge pose-bad';
-    $poseBadgeTxt.textContent = 'Head moved — auto-correcting… or recalibrate';
-    $poseBadge.style.opacity = '1';
-  } else if (maxDev > 10) {
-    $poseBadge.className = 'pose-badge pose-warn';
-    $poseBadgeTxt.textContent = 'Head slightly off — auto-correcting';
-    $poseBadge.style.opacity = '1';
-  } else {
-    poseBadgeHideTimer = setTimeout(function () {
-      $poseBadge.style.opacity = '0';
-    }, 1200);
-  }
-}
-
-/* ────────────────────────────────────────────────────────
-   SCREEN SWITCHER
-──────────────────────────────────────────────────────── */
-function showScreen(name) {
-  var prev = $screens[currentScreen];
-  var next = $screens[name];
-  if (prev === next) return;
-
-  prev.classList.remove('enter', 'active');
-  prev.classList.add('leave');
-  var prevRef = prev;
-  setTimeout(function () {
-    prevRef.classList.remove('leave');
-  }, 320);
-
-  currentScreen = name;
-  next.classList.remove('leave');
-  next.classList.add('active', 'enter');
-}
-
-/* ────────────────────────────────────────────────────────
-   WEBGAZER WRAPPER
-──────────────────────────────────────────────────────── */
-function wg() {
-  return (typeof webgazer !== 'undefined') ? webgazer : null;
-}
-
-function safeCall(fn) {
-  try { fn(); } catch (e) { console.warn('[EyeCursor]', e); }
-}
-
-function stopWebGazer() {
-  var w = wg();
-  if (!w) return;
-  safeCall(function () { w.clearGazeListener(); });
-  safeCall(function () { w.showVideo(false); });
-  safeCall(function () { w.end(); });
-  var vc = document.getElementById('webgazerVideoContainer');
-  if (vc) vc.style.display = 'none';
-  if (videoObserver) { videoObserver.disconnect(); videoObserver = null; }
-}
-
-function clearCalibTimers() {
-  calibTimers.forEach(function (id) {
-    clearTimeout(id);
-    clearInterval(id);
-  });
-  calibTimers = [];
-}
-
-/* ────────────────────────────────────────────────────────
-   BUTTON LISTENERS
-──────────────────────────────────────────────────────── */
-document.getElementById('btn-start').addEventListener('click', startSession);
-document.getElementById('btn-retry').addEventListener('click', function () { showScreen('welcome'); });
-document.getElementById('btn-stop').addEventListener('click', endSession);
-document.getElementById('btn-start-calib').addEventListener('click', function () {
-  /* Hide face overlay now that we are entering calibration */
-  clearTimeout(precalibFaceTimer);
-  var w = wg();
-  if (w) {
-    safeCall(function () { w.showFaceOverlay(false); });
-    safeCall(function () { w.showFaceFeedbackBox(false); });
-    safeCall(function () { w.showVideo(false); });
-  }
-  beginCalibration();
-});
-document.getElementById('btn-recalib').addEventListener('click', function () {
-  clearCalibTimers();
-  var w = wg();
-  if (w) {
-    safeCall(function () { w.clearGazeListener(); });
-    safeCall(function () { w.showVideo(false); });
-  }
-  if (videoObserver) { videoObserver.disconnect(); videoObserver = null; }
-  gazeFilter.reset();
-  prevDotPx = null;
-  prevDotPy = null;
-  showPrecalib();
-});
-
-window.addEventListener('beforeunload', function () {
-  safeCall(stopWebGazer);
-});
-
-/* ────────────────────────────────────────────────────────
-   ERROR MESSAGE HELPER
-──────────────────────────────────────────────────────── */
-function getErrMsg(err) {
-  var name = '', msg = '';
-  try { name = err && err.name    ? String(err.name)    : ''; } catch(e) {}
-  try { msg  = err && err.message ? String(err.message) : String(err); } catch(e) {}
-
-  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return 'Camera permission was denied.\n\nTap the lock icon in the address bar → set Camera to "Allow" → press Try Again.';
-  }
-  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return 'No camera was found. Connect a camera and press Try Again.';
-  }
-  if (name === 'NotReadableError' || name === 'TrackStartError') {
-    return 'Camera is in use by another app. Close the other app and press Try Again.';
-  }
-  if (name === 'SecurityError') {
-    return 'Camera access was blocked by browser security. Make sure the page is served over HTTP or HTTPS (not opened as a raw file), then press Try Again.';
-  }
-  return 'Could not start the eye tracker.' + (msg ? '\n\nDetail: ' + msg : '');
-}
-
-/* ────────────────────────────────────────────────────────
-   START SESSION
-   ──────────────────────────────────────────────────────
-   IMPORTANT: ALL webgazer configuration (showVideo, setRegression,
-   showFaceOverlay, etc.) is done AFTER begin() resolves, not before.
-   Calling these methods before begin() touches uninitialised internal
-   structures and causes "t is not a function" TypeErrors.
-
-   We do NOT do a preflight getUserMedia check — that holds a camera
-   lock that Android takes time to release. WebGazer owns the camera.
-──────────────────────────────────────────────────────── */
-function startSession() {
-  showScreen('loading');
-  setLoadingText('Starting eye tracker…');
-
-  var w = wg();
-  if (!w) {
-    showError('WebGazer.js failed to load. Check your internet connection and reload the page.');
-    return;
-  }
-
-  /* begin() — may return a Promise (modern builds) or void (older builds) */
-  var r;
-  try { r = w.begin(); } catch (syncErr) {
-    console.error('[EyeCursor] begin() threw synchronously:', syncErr);
-    showError(getErrMsg(syncErr));
-    return;
-  }
-
-  var begun = (r && typeof r.then === 'function')
-    ? r
-    : new Promise(function (resolve) {
-        setLoadingText('Waiting for face model to load…');
-        setTimeout(resolve, 5000);
-      });
-
-  begun
-    .then(function () {
-      /*
-       * Configure display AFTER begin() resolves.
-       *
-       * FACE DETECTION FIX — what NOT to do here:
-       * ─ Do NOT call showFaceFeedbackBox(false) yet. WebGazer's TFFacemesh
-       *   model uses the feedback box canvas context internally to run its
-       *   face-detection pipeline. Hiding it before the model has warmed up
-       *   (~2 s) prevents face data from flowing → gaze listener always null.
-       * ─ Do NOT call clearData() here on a fresh session — it resets internal
-       *   tracker state alongside regression weights.
-       *
-       * We defer those calls to showPrecalib() after a warm-up delay.
-       */
-      safeCall(function () { w.showPredictionPoints(false); });
-      safeCall(function () { w.showVideo(false); });
-      safeCall(function () { w.showFaceOverlay(false); });
-      /* showFaceFeedbackBox: intentionally NOT called here — deferred */
-      safeCall(function () { w.setRegression('ridge'); });
-
-      /* Initialise head pose tracking (device orientation + tracker poll) */
-      setupPoseTracking();
-
-      setLoadingText('Ready!');
-      showPrecalib();
-    })
-    .catch(function (err) {
-      console.error('[EyeCursor] start error:', err);
-      showError(getErrMsg(err));
-    });
-}
-
-function setLoadingText(msg) {
-  if ($loadingSub) $loadingSub.textContent = msg;
-}
-
-function endSession() {
-  clearCalibTimers();
-  stopWebGazer();
-  gazeFilter.reset();
-  nullCount   = 0;
-  prevDotPx   = null;
-  prevDotPy   = null;
-  lastCursorX = null;
-  lastCursorY = null;
-  poseActive  = false;
-  poseBaseline = null;
-  trackerRoll = null;
-  trackerYaw  = null;
-  trackerEyeSpan = null;
-  calibEyeSpan = null;
-  calibEyeSpanSamples = [];
-  adaptRollSmooth = null;
-  adaptBetaSmooth = null;
-  adaptGammaSmooth = null;
-  adaptYawSmooth = null;
-  clearTimeout(poseBadgeHideTimer);
-  $trackFaceWarn.classList.remove('visible');
-  if ($poseBadge) $poseBadge.style.opacity = '0';
-  showScreen('welcome');
-}
-
-function showError(msg) {
-  try { if ($errText) $errText.textContent = msg || 'An unexpected error occurred.'; } catch(e) {}
-  showScreen('error');
-}
-
-/* ════════════════════════════════════════════════════════
-   PRE-CALIBRATION — face check + instruction screen
-   Shows the camera feed so the user can verify they are centred
-   and well-lit. The "Start Calibration" button is disabled until
-   WebGazer reports a face for at least 1 consecutive second.
-
-   FACE DETECTION FIXES applied here:
-   1. showFaceOverlay(true) during detection — the face mesh overlay
-      is WebGazer's visible confirmation that TFFacemesh is running.
-      Hiding it prematurely also suppresses the internal detection
-      pipeline on some browser/GPU combinations.
-   2. 2.5 s warm-up delay before attaching the gaze listener —
-      TFFacemesh needs time to initialise its canvas context after
-      the video stream starts. Frames during this window all return
-      null regardless of whether a face is present.
-   3. clearData() deferred to here, AFTER the model is warm —
-      clearing regression data before the tracker is running causes
-      it to restart its internal face state from scratch.
-════════════════════════════════════════════════════════ */
-function showPrecalib() {
-  precalibFaceOk       = false;
-  precalibFaceStreaking = false;
-  clearTimeout(precalibFaceTimer);
-  $btnStartCalib.disabled = true;
-  $btnStartCalibTxt.textContent = 'Waiting for face…';
-  setPrecalibFace(false);
-
-  showScreen('precalib');
-
-  /* Show warmup indicator */
-  if ($precalibWarmup) $precalibWarmup.style.display = 'inline-flex';
-
-  var w = wg();
-  if (w) {
-    safeCall(function () { w.showVideo(true); });
-    /* Keep face overlay ON during pre-calib — it feeds the detection pipeline */
-    safeCall(function () { w.showFaceOverlay(true); });
-    safeCall(function () { w.showFaceFeedbackBox(true); });
-  }
-  applyVideoStyles();
-  startVideoObserver();
-
-  /*
-   * WARM-UP DELAY: wait 2.5 s before attaching the gaze listener.
-   * During the first ~2 s after video starts, TFFacemesh initialises
-   * its canvas/WebGL context. Every frame in this window returns null
-   * even with a perfect face in frame. Attaching too early causes the
-   * streak counter to never start, so the button stays disabled forever.
-   */
-  var warmupDone = false;
-  var warmupId = setTimeout(function () {
-    warmupDone = true;
-    /* Hide the "loading model" indicator */
-    if ($precalibWarmup) $precalibWarmup.style.display = 'none';
-    /* Update status text to active scanning */
-    if (!precalibFaceOk) setPrecalibScanning();
-    /* Clear stale regression data NOW — model is warm, safe to do so */
-    if (w) safeCall(function () { w.clearData(); });
-
-    if (!w || currentScreen !== 'precalib') return;
-
-    safeCall(function () {
-      w.setGazeListener(function (data) {
-        if (currentScreen !== 'precalib') return;
-
-        if (data !== null && data !== undefined) {
-          if (!precalibFaceStreaking && !precalibFaceOk) {
-            precalibFaceStreaking = true;
-            /* Require 1 s of continuous face presence (shorter = more responsive) */
-            precalibFaceTimer = setTimeout(function () {
-              precalibFaceOk = true;
-              setPrecalibFace(true);
-            }, 1000);
-          }
-        } else {
-          if (precalibFaceStreaking) {
-            precalibFaceStreaking = false;
-            clearTimeout(precalibFaceTimer);
-          }
-          if (precalibFaceOk) {
-            precalibFaceOk = false;
-            setPrecalibFace(false);
-          }
-        }
-      });
-    });
-  }, 2500);
-
-  /* Store warmup timer so it can be cancelled on early navigation */
-  calibTimers.push(warmupId);
-}
-
-function setPrecalibFace(ok) {
-  if (ok) {
-    $precalibFace.className = 'face-status-row good';
-    $precalibFaceTxt.textContent = 'Face detected — you are good to go!';
-    $btnStartCalib.disabled = false;
-    $btnStartCalibTxt.textContent = 'Start Calibration';
-  } else {
-    $precalibFace.className = 'face-status-row bad';
-    $precalibFaceTxt.textContent = 'Scanning for your face — look directly at the camera';
-    $btnStartCalib.disabled = true;
-    $btnStartCalibTxt.textContent = 'Waiting for face…';
-  }
-}
-
-/* Called after warm-up completes — updates UI to show active scanning */
-function setPrecalibScanning() {
-  if (!precalibFaceOk) {
-    $precalibFaceTxt.textContent = 'Scanning for your face — look directly at the camera';
-  }
-}
-
-/* ════════════════════════════════════════════════════════
-   CALIBRATION
-════════════════════════════════════════════════════════ */
-function beginCalibration() {
-  /* Guard against re-entrant calls (double-click, rapid recalibrate) */
-  clearCalibTimers();
-
-  calibStep = 0;
-  prevDotPx = null;
-  prevDotPy = null;
-
-  /* Reset head pose samples and baseline for this calibration run */
-  calibGamma = []; calibBeta = []; calibRoll = [];
-  calibEyeSpanSamples = [];
-  calibEyeSpan = null;
-  adaptRollSmooth = null; adaptBetaSmooth = null;
-  adaptGammaSmooth = null; adaptYawSmooth = null;
-  poseBaseline = null;
-  poseActive   = false;
-
-  showScreen('calib');
-  $calibOk.style.display = 'none';
-  $dotHost.style.display = 'flex';
-  $dotHost.style.opacity = '0';
-  $travelOverlay.classList.remove('visible');
-  showFaceBadge(false);
-
-  /*
-   * Reattach gaze listener for face-badge during calibration.
-   * (Pre-calib used a different callback; we replace it here.)
-   */
-  var w = wg();
-  if (w) {
-    safeCall(function () {
-      w.setGazeListener(function (data) {
-        if (currentScreen === 'calib') {
-          showFaceBadge(data !== null && data !== undefined);
-        }
-      });
-    });
-  }
-
-  placeDot();
-}
-
-/* ──────────────────────────────────────────────────────
-   placeDot()
-   On the first call: fade the dot in without moving it.
-   On subsequent calls: show the "Follow the dot" overlay,
-   let the dot travel via CSS transition, then after it
-   arrives hide the overlay and begin the dwell recording.
-────────────────────────────────────────────────────── */
-function placeDot() {
-  $calibOk.style.display = 'none';
-  $dotHost.style.display = 'flex';
-
-  var pt  = CALIB_POINTS[calibStep];
-  var px  = Math.round((window.innerWidth  * pt.xp) / 100);
-  var py  = Math.round((window.innerHeight * pt.yp) / 100);
-
-  /* Update footer */
-  $calibLabel.textContent = 'Point ' + (calibStep + 1) + ' of ' + TOTAL_POINTS;
-  $calibBar.style.width = ((calibStep / TOTAL_POINTS) * 100) + '%';
-
-  /* Reset progress ring */
-  setProgressRing(0);
-  $dotCount.textContent = Math.ceil(DWELL_MS / 1000);
-
-  /* Restart pulse animations */
-  var rings = $dotHost.querySelectorAll('.dot-ring');
-  rings.forEach(function (r) {
-    r.style.animation = 'none';
-    void r.offsetWidth;
-    r.style.animation = '';
-  });
-
-  clearCalibTimers();
-
-  if (prevDotPx === null) {
-    /* ── First dot: place instantly, fade in ── */
-    $dotHost.classList.add('no-transition');
-    $dotHost.style.left = px + 'px';
-    $dotHost.style.top  = py + 'px';
-    /* Force layout, then fade in */
-    void $dotHost.offsetWidth;
-    $dotHost.style.opacity = '1';
-    /* Small delay then start recording */
-    var t1 = setTimeout(function () {
-      runDwell(px, py);
-    }, 400);
-    calibTimers.push(t1);
-  } else {
-    /* ── Subsequent dots: show travel overlay, then slide ── */
-    $travelOverlay.classList.add('visible');
-    /* Enable CSS transition for smooth travel */
-    $dotHost.classList.remove('no-transition');
-    $dotHost.style.left = px + 'px';
-    $dotHost.style.top  = py + 'px';
-    /* After travel animation completes, hide overlay and start dwell */
-    var t2 = setTimeout(function () {
-      $travelOverlay.classList.remove('visible');
-      runDwell(px, py);
-    }, TRAVEL_MS + 80);   /* slight buffer past CSS transition */
-    calibTimers.push(t2);
-  }
-
-  prevDotPx = px;
-  prevDotPy = py;
-}
-
-/* ──────────────────────────────────────────────────────
-   runDwell()
-   Records gaze every RECORD_INTERVAL ms starting after
-   FIRST_RECORD_WAIT ms (allowing eyes to settle on the dot).
-   Progress ring fills smoothly over DWELL_MS.
-────────────────────────────────────────────────────── */
-function runDwell(px, py) {
-  var start   = performance.now();
-  var elapsed = 0;
-
-  /* Smooth countdown tick every 100 ms */
-  var tickId = setInterval(function () {
-    elapsed = performance.now() - start;
-    var frac = Math.min(elapsed / DWELL_MS, 1);
-    setProgressRing(frac);
-    var remaining = Math.ceil((DWELL_MS - elapsed) / 1000);
-    $dotCount.textContent = Math.max(0, remaining);
-
-    if (elapsed >= DWELL_MS) {
-      clearInterval(tickId);
-      advanceCalib();
-    }
-  }, 100);
-  calibTimers.push(tickId);
-
-  /*
-   * CONTINUOUS RECORDING STRATEGY
-   * Wait for initial fixation (FIRST_RECORD_WAIT), then record
-   * every RECORD_INTERVAL ms for the rest of the dwell.
-   * Each recordScreenPosition() snapshots the current facial
-   * keypoints → (px, py) mapping in the regression model.
-   * ~16 samples per point × 9 points = ~144 training samples.
-   */
-  var recordId = setTimeout(function () {
-    recordOnce(px, py);
-    collectPoseSample();   /* snapshot device orientation + tracker roll */
-
-    var intervalId = setInterval(function () {
-      var now = performance.now() - start;
-      if (now >= DWELL_MS - 100) {
-        clearInterval(intervalId);
-        return;
-      }
-      recordOnce(px, py);
-      collectPoseSample(); /* keep accumulating pose samples */
-    }, RECORD_INTERVAL);
-    calibTimers.push(intervalId);
-  }, FIRST_RECORD_WAIT);
-  calibTimers.push(recordId);
-}
-
-function recordOnce(px, py) {
-  var w = wg();
-  if (!w) return;
-  safeCall(function () { w.recordScreenPosition(px, py, 'click'); });
-}
-
-function setProgressRing(frac) {
-  $progCircle.style.strokeDashoffset = (CIRC * (1 - frac)).toFixed(2);
-}
-
-/* ──────────────────────────────────────────────────────
-   advanceCalib()
-   Shows a "✓ Next point" moment, then calls placeDot()
-   for the next step (or moves to tracking if done).
-────────────────────────────────────────────────────── */
-function advanceCalib() {
-  clearCalibTimers();
-  $dotHost.style.display = 'none';
-  $calibOk.style.display = 'flex';
-  $faceBadge.style.opacity = '0';
-
-  var isLast = (calibStep >= TOTAL_POINTS - 1);
-
-  if (isLast) {
-    $calibOkMsg.textContent = 'Calibration Complete!';
-    $calibOkSub.textContent = 'Starting eye tracking…';
-  } else {
-    $calibOkMsg.textContent = 'Point ' + (calibStep + 1) + ' done';
-    $calibOkSub.textContent = 'Follow the dot to its next position';
-  }
-
-  /* Re-trigger ok-icon animation */
-  var okIcon = $calibOk.querySelector('.ok-icon');
-  if (okIcon) {
-    okIcon.style.animation = 'none';
-    void okIcon.offsetWidth;
-    okIcon.style.animation = '';
-  }
-
-  /* Fill bar to current completion */
-  $calibBar.style.width = (((calibStep + 1) / TOTAL_POINTS) * 100) + '%';
-
-  var delay = isLast ? 1600 : 900;
-  var nextId = setTimeout(function () {
-    if (isLast) {
-      $calibBar.style.width = '100%';
-      startTracking();
-    } else {
-      calibStep++;
-      /* Show the dot again before moving */
-      $dotHost.style.display = 'flex';
-      placeDot();
-    }
-  }, delay);
-  calibTimers.push(nextId);
-}
-
-/* Face badge — shown during calibration only */
-function showFaceBadge(detected) {
-  if (detected) {
-    $faceBadge.className = 'good';
-    $faceBadgeTxt.textContent = 'Face detected';
-    $faceBadge.style.opacity = '1';
-    clearTimeout($faceBadge._hideTimer);
-    $faceBadge._hideTimer = setTimeout(function () {
-      if ($faceBadge.classList.contains('good')) {
-        $faceBadge.style.opacity = '0';
-      }
-    }, 2000);
-  } else {
-    $faceBadge.className = 'bad';
-    $faceBadgeTxt.textContent = 'Looking for your face…';
-    $faceBadge.style.opacity = '1';
-  }
-}
-
-/* ════════════════════════════════════════════════════════
-   TRACKING
-════════════════════════════════════════════════════════ */
-function startTracking() {
-  /* Compute the head-pose baseline from all calibration samples */
-  finalizeBaseline();
-
-  showScreen('tracking');
-  gazeFilter.reset();
-  lastCursorX = null;
-  lastCursorY = null;
-  nullCount = 0;
-  $trackFaceWarn.classList.remove('visible');
-  if ($poseBadge) $poseBadge.style.opacity = '0';
-
-  var w = wg();
-  if (!w) return;
-
-  /* Show small camera preview in corner */
-  safeCall(function () { w.showVideo(true); });
-  safeCall(function () { w.showFaceOverlay(false); });
-  safeCall(function () { w.showFaceFeedbackBox(false); });
-  safeCall(function () { w.showPredictionPoints(false); });
-
-  applyVideoStyles();
-  startVideoObserver();
-
-  /* ──────────────────────────────────────────────────
-     GAZE LISTENER
-     Applies One Euro Filter to every raw gaze reading.
-     Eyeball subtends only ~2° at 60 cm distance; a small
-     eye movement translates to a large pixel distance, so
-     the raw signal is inherently noisy. The OEF with low
-     minCutoff keeps the cursor stable when the eye is held
-     still, and its adaptive beta lets it follow deliberate
-     saccades without added lag.
-  ────────────────────────────────────────────────────── */
-  safeCall(function () {
-    w.setGazeListener(function (data) {
-      if (currentScreen !== 'tracking') return;
-
-      if (!data) {
-        nullCount++;
-        if (nullCount >= NULL_WARN_THRESHOLD) {
-          $trackFaceWarn.classList.add('visible');
-        }
-        return;
-      }
-
-      if (nullCount >= NULL_WARN_THRESHOLD) {
-        $trackFaceWarn.classList.remove('visible');
-      }
-      nullCount = 0;
-
-      /*
-       * HEAD POSE CORRECTION
-       * Apply roll + pitch compensation BEFORE the smoothing filter.
-       * This way the OEF tracks the corrected signal rather than
-       * the raw (potentially pose-drifted) one.
-       */
-      var corrected = applyPoseCorrection(data.x, data.y);
-
-      /* Apply One Euro Filter — single pass, direct output */
-      var filtered = gazeFilter.apply(corrected.x, corrected.y);
-
-      /*
-       * DEAD-ZONE + INTEGER SNAP
-       * If the filtered position has moved less than DEAD_PX pixels
-       * since the last rendered position, don't update — this kills
-       * the tiny residual vibration that remains after filtering.
-       * Round to nearest integer before comparing so sub-pixel noise
-       * from toFixed() never triggers a repaint.
-       */
-      var nx = Math.round(filtered.x);
-      var ny = Math.round(filtered.y);
-      if (lastCursorX !== null &&
-          Math.abs(nx - lastCursorX) < DEAD_PX &&
-          Math.abs(ny - lastCursorY) < DEAD_PX) {
-        return;  /* movement too small — skip this frame */
-      }
-      lastCursorX = nx;
-      lastCursorY = ny;
-
-      /* Clamp to viewport so cursor never escapes */
-      var cx = Math.max(0, Math.min(window.innerWidth  - 1, nx));
-      var cy = Math.max(0, Math.min(window.innerHeight - 1, ny));
-
-      /* Move cursor — tip of arrow aligns to gaze point */
-      $eyeCursor.style.transform =
-        'translate3d(' + cx + 'px,' + cy + 'px,0)';
-    });
-  });
-
-  /* Update pose-deviation badge every 800 ms — cheap, no need for every frame */
-  (function poseBadgeLoop() {
-    if (currentScreen !== 'tracking') return;
-    updatePoseBadge();
-    setTimeout(poseBadgeLoop, 800);
-  })();
-}
-
-/* ── WebGazer video container styling ── */
-function applyVideoStyles() {
-  var vc = document.getElementById('webgazerVideoContainer');
-  if (!vc) return;
-  vc.style.setProperty('display',        'block',      'important');
-  vc.style.setProperty('position',       'fixed',      'important');
-  vc.style.setProperty('bottom',         '22px',       'important');
-  vc.style.setProperty('right',          '22px',       'important');
-  vc.style.setProperty('top',            'auto',       'important');
-  vc.style.setProperty('left',           'auto',       'important');
-  vc.style.setProperty('width',          '160px',      'important');
-  vc.style.setProperty('height',         '120px',      'important');
-  vc.style.setProperty('border-radius',  '12px',       'important');
-  vc.style.setProperty('z-index',        '60',         'important');
-  vc.style.setProperty('overflow',       'hidden',     'important');
-  vc.style.setProperty('transform',      'none',       'important');
-}
-
-function startVideoObserver() {
-  if (videoObserver) videoObserver.disconnect();
-
-  videoObserver = new MutationObserver(function (mutations) {
-    mutations.forEach(function (m) {
-      if (
-        m.target.id === 'webgazerVideoContainer' ||
-        m.target.closest && m.target.closest('#webgazerVideoContainer')
-      ) {
-        applyVideoStyles();
-      }
-    });
-    applyVideoStyles();
-  });
-
-  videoObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['style', 'class']
-  });
-
-  /* Re-apply a few times in the first 2 s (WebGazer can fight us) */
-  [100, 300, 600, 1000, 2000].forEach(function (ms) {
-    setTimeout(applyVideoStyles, ms);
-  });
-}
-
-})(); /* end IIFE */
-</script>
-
-
-<!-- ═══════════════════════════════════════════════════════════
-     ANDROID EYESCROLL BRIDGE
-     Injected on top of the standalone eye-cursor HTML.
-
-     Adds:
-       1. Gaze zone classifier  (up / centre / down)
-       2. Blink detector        (1 / 2 / 3 blinks)
-       3. Gesture cooldown      (prevents accidental rapid fire)
-       4. Android JS bridge     (calls EyeScroll.onGesture())
-       5. Calibration hooks     (touch-passthrough toggling)
-       6. Overlay UI tweaks     (hide elements not needed in overlay)
-════════════════════════════════════════════════════════════ -->
-<script>
-/* ══════════════════════════════════════════════════════════
-   ANDROID BRIDGE DETECTION
-   Check if we are running inside the EyeScroll Android WebView.
-   The Java side injects window.EyeScroll via addJavascriptInterface.
-══════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ANDROID BRIDGE
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 var IS_ANDROID = (typeof window.EyeScroll !== 'undefined');
 
-function bridgeLog(msg) {
-  if (IS_ANDROID) {
-    try { window.EyeScroll.log(msg); } catch(e) {}
-  }
+function bridge(method, arg) {
+  if (!IS_ANDROID) return;
+  try {
+    if (arg !== undefined) window.EyeScroll[method](arg);
+    else window.EyeScroll[method]();
+  } catch(e) {}
 }
 
-bridgeLog('EyeScroll bridge loaded. Android=' + IS_ANDROID);
-
-/* ══════════════════════════════════════════════════════════
-   BLINK DETECTOR
-   Uses TFFacemesh Eye Aspect Ratio (EAR) from landmarks.
-
-   Eye landmarks (per eye, from 468-point mesh):
-     Left eye:  pts 159(top) 145(bottom) 133(left) 33(right) for EAR
-                Full: 160,159,158,157 (upper) 144,145,153,154 (lower)
-     Right eye: pts 386(top) 374(bottom) 362(left) 263(right)
-
-   EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||)
-   Blink: EAR drops below EAR_THRESHOLD for EAR_CONSEC_FRAMES frames
-
-   Blink counting:
-     - Each blink increments blinkCount
-     - After BLINK_SEQUENCE_GAP ms of no blink, the sequence fires
-       based on count: 1=pause, 2=like, 3=subscribe
-══════════════════════════════════════════════════════════ */
-
-var EAR_THRESHOLD     = 0.20;  /* below this = eye closed              */
-var EAR_CONSEC_FRAMES = 2;     /* consecutive closed frames = 1 blink  */
-var BLINK_SEQUENCE_GAP = 700;  /* ms after last blink to fire gesture  */
-var BLINK_MAX_DURATION = 400;  /* ms — longer than this = not a blink  */
-
-var earClosedFrames  = 0;      /* consecutive frames eye was closed     */
-var blinkCount       = 0;      /* blinks in current sequence            */
-var blinkSeqTimer    = null;   /* timer to fire the blink sequence      */
-var blinkOpenTime    = 0;      /* timestamp when eye last opened        */
-var eyeWasClosed     = false;  /* state machine: was eye closed?        */
-
-/* Compute Eye Aspect Ratio from 6 landmark points */
-function computeEAR(pts, p1, p2, p3, p4, p5, p6) {
-  if (!pts[p1] || !pts[p2] || !pts[p3] ||
-      !pts[p4] || !pts[p5] || !pts[p6]) return 1.0;
-
-  function dist(a, b) {
-    var dx = pts[a][0] - pts[b][0];
-    var dy = pts[a][1] - pts[b][1];
-    return Math.sqrt(dx*dx + dy*dy);
-  }
-  var vertical1 = dist(p2, p6);
-  var vertical2 = dist(p3, p5);
-  var horizontal = dist(p1, p4);
-  if (horizontal < 0.001) return 1.0;
-  return (vertical1 + vertical2) / (2.0 * horizontal);
+function stopEyeScroll() {
+  bridge('stopService');
+  // fallback â€” reload to reset state
+  setTimeout(function(){ location.reload(); }, 500);
 }
 
-function processBlink(positions) {
-  if (!positions || positions.length < 387) return;
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   UI HELPERS
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s){
+    s.classList.remove('active');
+  });
+  var el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
 
-  /* Left eye EAR  — landmarks: 133(outer) 159(top1) 158(top2) 145(bot1) 144(bot2) 33(inner) */
-  var leftEAR  = computeEAR(positions, 133, 159, 158, 145, 144, 33);
-  /* Right eye EAR — landmarks: 362(outer) 386(top1) 385(top2) 374(bot1) 373(bot2) 263(inner) */
-  var rightEAR = computeEAR(positions, 362, 386, 385, 374, 373, 263);
-  var ear = (leftEAR + rightEAR) / 2.0;
+function setLoadingMsg(msg) {
+  var el = document.getElementById('loading-msg');
+  if (el) el.textContent = msg;
+}
 
-  var now = Date.now();
+var toastTimer;
+function showToast(msg) {
+  var t = document.getElementById('gesture-toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.style.opacity='0'; }, 900);
+}
 
-  if (ear < EAR_THRESHOLD) {
-    /* Eye is CLOSED this frame */
-    earClosedFrames++;
-    if (!eyeWasClosed && earClosedFrames >= EAR_CONSEC_FRAMES) {
-      eyeWasClosed = true;
-      blinkOpenTime = now;
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   ONE EURO FILTER
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+function OneEuroFilter(freq, mco, beta, dco) {
+  var x_prev=null, dx_prev=0, t_prev=null;
+  function alpha(co) { var r=2*Math.PI*co/freq; return r/(r+1); }
+  function lowpass(x, xp, a) { return a*x+(1-a)*xp; }
+  return {
+    filter: function(x, t) {
+      if (x_prev===null) { x_prev=x; t_prev=t; return x; }
+      var dt=(t-t_prev)/1000; if(dt<=0)dt=1/freq;
+      var dx=(x-x_prev)/dt;
+      var edx=lowpass(dx, dx_prev, alpha(dco));
+      var co=mco+beta*Math.abs(edx);
+      var ex=lowpass(x, x_prev, alpha(co));
+      x_prev=ex; dx_prev=edx; t_prev=t;
+      return ex;
+    },
+    reset: function(){ x_prev=null; dx_prev=0; t_prev=null; }
+  };
+}
+
+var fX = OneEuroFilter(30, 0.5, 0.07, 1.0);
+var fY = OneEuroFilter(30, 0.5, 0.07, 1.0);
+var lastCX = null, lastCY = null;
+var DEAD_PX = 4;
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BLINK DETECTION
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var EAR_THRESH = 0.20;
+var EAR_FRAMES = 2;
+var BLINK_GAP  = 700;
+var BLINK_MAX  = 400;
+
+var earClosed=0, blinkCount=0, blinkTimer=null;
+var eyeClosed=false, eyeCloseTime=0;
+
+function earDist(pts, a, b) {
+  if(!pts[a]||!pts[b]) return 0;
+  var dx=pts[a][0]-pts[b][0], dy=pts[a][1]-pts[b][1];
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+function computeEAR(pts, p1,p2,p3,p4,p5,p6) {
+  var h=earDist(pts,p1,p4);
+  if(h<0.001) return 1;
+  return (earDist(pts,p2,p6)+earDist(pts,p3,p5))/(2*h);
+}
+
+function processBlink(pts) {
+  if(!pts||pts.length<387) return;
+  var lEAR=computeEAR(pts,133,159,158,145,144,33);
+  var rEAR=computeEAR(pts,362,386,385,374,373,263);
+  var ear=(lEAR+rEAR)/2;
+  var now=Date.now();
+  if(ear<EAR_THRESH) {
+    earClosed++;
+    if(!eyeClosed&&earClosed>=EAR_FRAMES){
+      eyeClosed=true; eyeCloseTime=now;
     }
   } else {
-    /* Eye is OPEN this frame */
-    if (eyeWasClosed) {
-      var closedDuration = now - blinkOpenTime;
-      if (closedDuration < BLINK_MAX_DURATION) {
-        /* Valid blink detected */
+    if(eyeClosed){
+      if(now-eyeCloseTime<BLINK_MAX){
         blinkCount++;
-        bridgeLog('Blink detected, count=' + blinkCount);
-        /* Reset sequence timer — we'll fire after the gap */
-        clearTimeout(blinkSeqTimer);
-        blinkSeqTimer = setTimeout(fireBlinkGesture, BLINK_SEQUENCE_GAP);
+        clearTimeout(blinkTimer);
+        blinkTimer=setTimeout(fireBlinkGesture, BLINK_GAP);
       }
-      eyeWasClosed = false;
+      eyeClosed=false;
     }
-    earClosedFrames = 0;
+    earClosed=0;
   }
 }
 
 function fireBlinkGesture() {
-  var count = blinkCount;
-  blinkCount = 0;
-  bridgeLog('Blink sequence fired: ' + count);
-
-  if (count === 1) sendGesture(3);       /* 1 blink  → tap (pause/play)  */
-  else if (count === 2) sendGesture(4);  /* 2 blinks → double-tap (like) */
-  else if (count >= 3) sendGesture(5);  /* 3 blinks → subscribe/follow  */
+  var c=blinkCount; blinkCount=0;
+  if(c===1) sendGesture(3,'â¸ Pause/Play');
+  else if(c===2) sendGesture(4,'â¤ Like');
+  else if(c>=3) sendGesture(5,'ðŸ”” Subscribe');
 }
 
-/* ══════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    GAZE ZONE CLASSIFIER
-   Divides screen into vertical zones:
-     UP zone    : y < screen_height * UP_THRESHOLD
-     DOWN zone  : y > screen_height * DOWN_THRESHOLD
-     CENTRE     : everything in between
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var UP_ZONE   = 0.28;
+var DOWN_ZONE = 0.72;
+var DWELL_MS  = 600;
+var SCROLL_CD = 1500;
 
-   Gesture fires when gaze stays in a zone for DWELL_TRIGGER_MS.
-   Resets when gaze leaves the zone, with a SHORT_RESET_MS grace
-   period to handle brief noise excursions.
-══════════════════════════════════════════════════════════ */
+var curZone='centre', zoneTime=0, zoneFired=false;
+var lastScroll=0, zoneResetTimer=null;
 
-var UP_THRESHOLD      = 0.28;  /* top 28% of screen = look up          */
-var DOWN_THRESHOLD    = 0.72;  /* bottom 28% of screen = look down      */
-var DWELL_TRIGGER_MS  = 600;   /* ms to hold zone before firing         */
-var ZONE_RESET_MS     = 200;   /* ms grace before zone resets           */
-
-var currentZone      = 'centre';
-var zoneEnteredTime  = 0;
-var zoneFired        = false;
-var zoneResetTimer   = null;
-var lastScrollTime   = 0;
-var SCROLL_COOLDOWN  = 1500;   /* ms between consecutive scroll gestures */
-
-function classifyZone(x, y) {
-  var H = window.innerHeight;
-  if (y < H * UP_THRESHOLD)   return 'up';
-  if (y > H * DOWN_THRESHOLD) return 'down';
-  return 'centre';
-}
-
-function processGazeZone(x, y) {
-  var zone = classifyZone(x, y);
-  var now  = Date.now();
-
-  if (zone !== currentZone) {
-    /* Entered a new zone — cancel grace reset, start dwell timer */
+function processZone(x, y) {
+  var H=window.innerHeight;
+  var zone = y<H*UP_ZONE?'up': y>H*DOWN_ZONE?'down':'centre';
+  var now=Date.now();
+  if(zone!==curZone){
     clearTimeout(zoneResetTimer);
-
-    currentZone     = zone;
-    zoneEnteredTime = now;
-    zoneFired       = false;
+    curZone=zone; zoneTime=now; zoneFired=false;
   }
-
-  if (!zoneFired && zone !== 'centre') {
-    var dwellTime = now - zoneEnteredTime;
-    if (dwellTime >= DWELL_TRIGGER_MS) {
-      if (now - lastScrollTime > SCROLL_COOLDOWN) {
-        zoneFired     = true;
-        lastScrollTime = now;
-        if (zone === 'up')   sendGesture(2);  /* look up   → prev reel */
-        if (zone === 'down') sendGesture(1);  /* look down → next reel */
-        bridgeLog('Zone gesture fired: ' + zone);
-        /* After firing, reset zone so user must re-enter for another */
-        zoneResetTimer = setTimeout(function() {
-          currentZone = 'centre';
-          zoneFired   = false;
-        }, ZONE_RESET_MS);
-      }
+  if(!zoneFired&&zone!=='centre'){
+    if(now-zoneTime>=DWELL_MS&&now-lastScroll>SCROLL_CD){
+      zoneFired=true; lastScroll=now;
+      if(zone==='up') sendGesture(2,'â¬† Prev Reel');
+      else sendGesture(1,'â¬‡ Next Reel');
+      zoneResetTimer=setTimeout(function(){
+        curZone='centre'; zoneFired=false;
+      },200);
     }
   }
 }
 
-/* ══════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    GESTURE SENDER
-   Single point of contact to Android bridge.
-   Shows visual feedback toast on screen.
-══════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var GESTURE_CD=1200, lastGesture=0;
 
-var GESTURE_COOLDOWN_MS = 1200;
-var lastGestureSentTime = 0;
+function sendGesture(code, label) {
+  var now=Date.now();
+  if(now-lastGesture<GESTURE_CD) return;
+  lastGesture=now;
+  showToast(label||'');
+  bridge('onGesture', code);
+}
 
-var GESTURE_LABELS = {
-  1: '⬇ Next Reel',
-  2: '⬆ Prev Reel',
-  3: '⏸ Pause/Play',
-  4: '❤ Like',
-  5: '🔔 Subscribe'
-};
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   CALIBRATION
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var CALIB_POINTS = [
+  [0.1,0.1],[0.5,0.1],[0.9,0.1],
+  [0.1,0.5],[0.5,0.5],[0.9,0.5],
+  [0.1,0.9],[0.5,0.9],[0.9,0.9]
+];
+var calibIdx=0, calibTimer=null, calibRecordTimer=null;
+var TRAVEL_MS=700, DWELL_MS_C=2500, RECORD_WAIT=600, RECORD_INT=180;
 
-function sendGesture(code) {
-  var now = Date.now();
-  if (now - lastGestureSentTime < GESTURE_COOLDOWN_MS) return;
-  lastGestureSentTime = now;
+function startCalibration() {
+  showScreen('calib-screen');
+  bridge('onCalibrationStart');
+  calibIdx=0;
+  showCalibPoint();
+}
 
-  bridgeLog('sendGesture: ' + code);
+function showCalibPoint() {
+  if(calibIdx>=CALIB_POINTS.length){ finishCalibration(); return; }
+  var pt=CALIB_POINTS[calibIdx];
+  var W=window.innerWidth, H=window.innerHeight;
+  var x=pt[0]*W, y=pt[1]*H;
+  var dot=document.getElementById('dot-host');
+  dot.style.left=x+'px'; dot.style.top=y+'px';
+  var prog=document.getElementById('calib-progress');
+  if(prog) prog.textContent='Point '+(calibIdx+1)+' of '+CALIB_POINTS.length;
 
-  /* Show on-screen feedback */
-  showGestureToast(GESTURE_LABELS[code] || '?');
+  clearTimeout(calibTimer);
+  calibTimer=setTimeout(function(){
+    recordAtPoint(x, y, function(){
+      calibIdx++;
+      showCalibPoint();
+    });
+  }, TRAVEL_MS);
+}
 
-  /* Call Android bridge */
-  if (IS_ANDROID) {
-    try { window.EyeScroll.onGesture(code); } catch(e) {}
+function recordAtPoint(x, y, done) {
+  var wg=window.webgazer;
+  if(!wg){ done(); return; }
+  var count=0;
+  setTimeout(function record(){
+    try { wg.recordScreenPosition(x, y, 'click'); } catch(e){}
+    count++;
+    if(count<8) setTimeout(record, RECORD_INT);
+    else done();
+  }, RECORD_WAIT);
+}
+
+function finishCalibration() {
+  showScreen(null); // hide all screens
+  document.getElementById('eye-cursor').style.display='block';
+  document.getElementById('status-badge').style.display='block';
+  document.getElementById('stop-btn').style.display='block';
+  // Make body fully transparent now
+  document.body.style.background='transparent';
+  bridge('onCalibrationDone');
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   WEBGAZER INIT
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+var cursor=document.getElementById('eye-cursor');
+var blinkPoll;
+
+window.onload=function(){
+  setLoadingMsg('Loading face modelâ€¦');
+
+  if(typeof webgazer==='undefined'){
+    setLoadingMsg('Error: WebGazer not loaded. Check internet connection.');
+    return;
   }
-}
 
-/* ══════════════════════════════════════════════════════════
-   ON-SCREEN GESTURE TOAST
-   Brief flash label showing what gesture was triggered.
-══════════════════════════════════════════════════════════ */
+  webgazer
+    .setGazeListener(function(data){
+      if(!data) return;
 
-var toastEl = null;
-var toastTimer = null;
+      // Blink detection from tracker
+      try{
+        var tr=webgazer.getTracker&&webgazer.getTracker();
+        if(tr&&tr.positions) processBlink(tr.positions);
+      }catch(e){}
 
-function createToast() {
-  var el = document.createElement('div');
-  el.style.cssText = [
-    'position:fixed',
-    'bottom:120px',
-    'left:50%',
-    'transform:translateX(-50%)',
-    'background:rgba(0,195,255,0.92)',
-    'color:#000',
-    'font-size:18px',
-    'font-weight:bold',
-    'padding:10px 28px',
-    'border-radius:50px',
-    'z-index:99999',
-    'pointer-events:none',
-    'opacity:0',
-    'transition:opacity 0.2s',
-    'white-space:nowrap',
-    'font-family:sans-serif'
-  ].join(';');
-  document.body.appendChild(el);
-  return el;
-}
+      // Gaze smoothing
+      var now=Date.now();
+      var sx=fX.filter(data.x, now);
+      var sy=fY.filter(data.y, now);
 
-function showGestureToast(label) {
-  if (!toastEl) toastEl = createToast();
-  toastEl.textContent = label;
-  toastEl.style.opacity = '1';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() {
-    toastEl.style.opacity = '0';
-  }, 900);
-}
+      // Dead zone
+      var nx=Math.round(sx), ny=Math.round(sy);
+      if(lastCX!==null &&
+         Math.abs(nx-lastCX)<DEAD_PX &&
+         Math.abs(ny-lastCY)<DEAD_PX) return;
+      lastCX=nx; lastCY=ny;
 
-/* ══════════════════════════════════════════════════════════
-   HOOK INTO EXISTING GAZE PIPELINE
-   The base eyetracker.html already calls webgazer.setGazeListener.
-   We intercept the final cursor position after pose correction
-   by monkey-patching the existing tracking gaze listener.
-   We also hook into the tracker poll to extract face positions
-   for blink detection.
-══════════════════════════════════════════════════════════ */
+      // Move cursor
+      var cx=Math.max(0,Math.min(window.innerWidth-1,nx));
+      var cy=Math.max(0,Math.min(window.innerHeight-1,ny));
+      cursor.style.transform='translate3d('+cx+'px,'+cy+'px,0)';
 
-/* Poll tracker for blink detection at ~30fps */
-var blinkPollInterval = null;
+      // Zone detection (only after calibration)
+      if(cursor.style.display==='block'){
+        processZone(cx, cy);
+      }
+    })
+    .begin()
+    .then(function(){
+      webgazer.showPredictionPoints(false);
+      webgazer.showVideo(true);
+      webgazer.showFaceOverlay(false);
+      webgazer.showFaceFeedbackBox(false);
+      webgazer.setRegression('ridge');
 
-function startBlinkPoll() {
-  if (blinkPollInterval) return;
-  blinkPollInterval = setInterval(function() {
-    try {
-      var wg = window.webgazer || (typeof webgazer !== 'undefined' ? webgazer : null);
-      if (!wg) return;
-      var tracker = wg.getTracker && wg.getTracker();
-      if (!tracker || !tracker.positions) return;
-      processBlink(tracker.positions);
-    } catch(e) {}
-  }, 33); /* ~30fps */
-}
+      setLoadingMsg('Camera ready â€” looking for faceâ€¦');
 
-/* Hook into gaze output — intercept the transform call on eye cursor */
-(function hookGazePipeline() {
-  /* Wait for the base script to set up webgazer, then intercept */
-  var hookInterval = setInterval(function() {
-    var cursorEl = document.getElementById('eye-cursor');
-    if (!cursorEl) return;
-
-    /* Override the style.transform setter to intercept cursor position */
-    var originalDescriptor = Object.getOwnPropertyDescriptor(
-      CSSStyleDeclaration.prototype, 'transform'
-    );
-
-    var lastX = -1, lastY = -1;
-
-    Object.defineProperty(cursorEl.style, 'transform', {
-      set: function(val) {
-        /* Apply original */
-        if (originalDescriptor && originalDescriptor.set) {
-          originalDescriptor.set.call(this, val);
-        } else {
-          this.cssText = this.cssText; /* fallback */
-          cursorEl.setAttribute('style',
-            cursorEl.getAttribute('style').replace(/transform:[^;]+;?/, '') +
-            ';transform:' + val);
-        }
-
-        /* Parse x, y from translate3d(Xpx, Ypx, 0) */
-        var m = val.match(/translate3d\(([0-9.]+)px,([0-9.]+)px/);
-        if (!m) return;
-        var x = parseFloat(m[1]);
-        var y = parseFloat(m[2]);
-        if (x === lastX && y === lastY) return;
-        lastX = x; lastY = y;
-
-        /* Feed into zone classifier */
-        processGazeZone(x, y);
-      },
-      get: function() {
-        return originalDescriptor && originalDescriptor.get
-          ? originalDescriptor.get.call(this)
-          : '';
-      },
-      configurable: true
+      // Wait 2.5s for model warmup then start calibration
+      setTimeout(function(){
+        webgazer.clearData();
+        setLoadingMsg('Starting calibrationâ€¦');
+        setTimeout(startCalibration, 500);
+      }, 2500);
+    })
+    .catch(function(err){
+      setLoadingMsg('Camera error: '+err);
     });
-
-    clearInterval(hookInterval);
-    bridgeLog('Gaze pipeline hooked');
-    startBlinkPoll();
-  }, 200);
-})();
-
-/* ══════════════════════════════════════════════════════════
-   CALIBRATION BRIDGE HOOKS
-   Notify Android when calibration starts/ends so the overlay
-   can toggle touch-passthrough on the window flags.
-══════════════════════════════════════════════════════════ */
-
-(function hookCalibration() {
-  var checkInterval = setInterval(function() {
-    /* Hook the beginCalibration function from base script */
-    if (typeof beginCalibration === 'function' && !beginCalibration._hooked) {
-      var origBegin = beginCalibration;
-      window.beginCalibration = function() {
-        if (IS_ANDROID) {
-          try { window.EyeScroll.onCalibrationStart(); } catch(e) {}
-        }
-        return origBegin.apply(this, arguments);
-      };
-      window.beginCalibration._hooked = true;
-    }
-
-    /* Hook finalizeBaseline (calibration done) */
-    if (typeof finalizeBaseline === 'function' && !finalizeBaseline._hooked) {
-      var origFinalize = finalizeBaseline;
-      window.finalizeBaseline = function() {
-        var result = origFinalize.apply(this, arguments);
-        if (IS_ANDROID) {
-          try { window.EyeScroll.onCalibrationDone(); } catch(e) {}
-        }
-        return result;
-      };
-      window.finalizeBaseline._hooked = true;
-      clearInterval(checkInterval);
-      bridgeLog('Calibration hooks installed');
-    }
-  }, 300);
-})();
-
-/* ══════════════════════════════════════════════════════════
-   OVERLAY UI ADJUSTMENTS
-   When running inside Android overlay, hide the "back" / home
-   buttons and adjust layout so nothing is cut off by the
-   notification bar.
-══════════════════════════════════════════════════════════ */
-
-if (IS_ANDROID) {
-  document.addEventListener('DOMContentLoaded', function() {
-    document.body.classList.add('android-overlay'); 
-    document.body.style.paddingTop = '24px';
-
-    var stopBtn = document.createElement('button');
-    stopBtn.textContent = '■ Stop EyeScroll';
-    stopBtn.style.cssText = [
-      'position:fixed',
-      'top:8px',
-      'right:8px',
-      'background:rgba(255,50,50,0.9)',
-      'color:white',
-      'border:none',
-      'padding:8px 16px',
-      'border-radius:20px',
-      'font-size:13px',
-      'font-weight:bold',
-      'z-index:999999',
-      'cursor:pointer',
-      'font-family:sans-serif'
-    ].join(';');
-    stopBtn.addEventListener('click', function() {
-      try { window.EyeScroll.stopService(); } catch(e) {}
-    });
-    document.body.appendChild(stopBtn);
-
-    var badge = document.createElement('div');
-    badge.style.cssText = [
-      'position:fixed',
-      'top:8px',
-      'left:50%',
-      'transform:translateX(-50%)',
-      'background:rgba(0,195,255,0.15)',
-      'border:1px solid rgba(0,195,255,0.4)',
-      'color:rgba(0,195,255,0.9)',
-      'font-size:11px',
-      'padding:3px 14px',
-      'border-radius:20px',
-      'z-index:99998',
-      'pointer-events:none',
-      'font-family:sans-serif'
-    ].join(';');
-    badge.textContent = '👁 EyeScroll Active';
-    document.body.appendChild(badge);
-  });
-}
-}
+};
 </script>
 </body>
 </html>
