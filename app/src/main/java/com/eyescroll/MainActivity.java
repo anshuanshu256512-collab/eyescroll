@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Create layout programmatically â€” no XML dependency issues
+        // Create layout programmatically — no XML dependency issues
         FrameLayout root = new FrameLayout(this);
         root.setLayoutParams(new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -56,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
         root.addView(main);
         mainLayout = main;
 
-        // Calibration container â€” full screen WebView
+        // Calibration container — full screen WebView
         calibContainer = new FrameLayout(this);
         calibContainer.setLayoutParams(new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -108,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setStatus(TextView tv, boolean ok) {
-        tv.setText(ok ? "âœ“ Granted" : "Tap to grant");
+        tv.setText(ok ? "Granted ✓" : "Tap to grant");
         tv.setTextColor(getColor(ok ? R.color.green : R.color.amber));
     }
 
@@ -129,14 +129,14 @@ public class MainActivity extends AppCompatActivity {
             new AlertDialog.Builder(this)
                 .setTitle("Enable Accessibility")
                 .setMessage("Find 'EyeScroll Gesture Control' and enable it.\n\n"
-                    + "It only performs gestures â€” reads nothing.")
+                    + "It only performs gestures — reads nothing.")
                 .setPositiveButton("Open Settings", (d, w) ->
                     accessibilityLauncher.launch(
                         new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
                 .show();
             return;
         }
-        // All permissions granted â€” show calibration
+        // All permissions granted — show calibration
         showCalibration();
     }
 
@@ -235,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
             startService(i);
         }
         Toast.makeText(this,
-            "ðŸ‘ EyeScroll active! Open YouTube or Instagram.",
+            "EyeScroll active! Open YouTube or Instagram.",
             Toast.LENGTH_LONG).show();
     }
 
@@ -245,4 +245,4 @@ public class MainActivity extends AppCompatActivity {
         startService(i);
         updateStatuses();
     }
-            }
+}
