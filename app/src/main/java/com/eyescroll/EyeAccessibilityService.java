@@ -1,136 +1,75 @@
 package com.eyescroll;
-import android.app.*;
-import android.content.Intent;
-import android.graphics.PixelFormat;
-import android.os.*;
-import android.view.View;
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.content.Context;
+import android.graphics.Path;
+import android.os.Build;
+import android.util.DisplayMetrics;
 import android.view.WindowManager;
-import android.webkit.*;
-import androidx.core.app.NotificationCompat;
-public class EyeOverlayService extends Service {
-    public static final String ACTION_START="com.eyescroll.START",ACTION_STOP="com.eyescroll.STOP";
-    private static final String CH_ID="eyescroll_fg";
-    private static final int NID=1001;
-    private static boolean running=false;
-    public static boolean isRunning(){return running;}
-    private WindowManager wm;
-    private WebView wv;
-    private long lastGesture=0;
-    private static final long COOLDOWN=1200;
-    @Override public void onCreate(){
-        super.onCreate();
-        wm=(WindowManager)getSystemService(WINDOW_SERVICE);
+import android.view.accessibility.AccessibilityEvent;
+import android.provider.Settings;
+public class EyeAccessibilityService extends AccessibilityService {
+    public static final int GESTURE_SWIPE_DOWN=1,GESTURE_SWIPE_UP=2,
+        GESTURE_TAP=3,GESTURE_DOUBLE_TAP=4,GESTURE_SUBSCRIBE=5;
+    private static EyeAccessibilityService instance;
+    public static EyeAccessibilityService getInstance(){return instance;}
+    public static boolean isEnabled(Context ctx){
+        String s=Settings.Secure.getString(
+            ctx.getContentResolver(),
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return s!=null&&s.contains(
+            ctx.getPackageName()+"/"+
+            EyeAccessibilityService.class.getName());
     }
-    @Override public int onStartCommand(Intent i,int f,int id){
-        if(i==null)return START_NOT_STICKY;
-        if(ACTION_START.equals(i.getAction())&&!running){
-            startFg();
-            createOverlay();
-            running=true;
-        } else if(ACTION_STOP.equals(i.getAction())){
-            teardown();
-        }
-        return START_NOT_STICKY;
+    @Override public void onServiceConnected(){
+        super.onServiceConnected();instance=this;
     }
-    @Override public IBinder onBind(Intent i){return null;}
-    @Override public void onDestroy(){teardown();super.onDestroy();}
-    private void startFg(){
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
-            NotificationChannel c=new NotificationChannel(
-                CH_ID,"EyeScroll",NotificationManager.IMPORTANCE_LOW);
-            getSystemService(NotificationManager.class).createNotificationChannel(c);
-        }
-        Intent si=new Intent(this,EyeOverlayService.class);
-        si.setAction(ACTION_STOP);
-        PendingIntent pi=PendingIntent.getService(this,0,si,
-            PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        startForeground(NID,new NotificationCompat.Builder(this,CH_ID)
-            .setContentTitle("EyeScroll Active")
-            .setContentText("Eye tracking running")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .addAction(android.R.drawable.ic_delete,"Stop",pi)
-            .setOngoing(true).build());
+    @Override public void onDestroy(){
+        super.onDestroy();instance=null;
     }
-    private void createOverlay(){
-        wv=new WebView(this);
-        WebSettings ws=wv.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setMediaPlaybackRequiresUserGesture(false);
-        ws.setAllowFileAccessFromFileURLs(true);
-        ws.setAllowUniversalAccessFromFileURLs(true);
-        ws.setDomStorageEnabled(true);
-        wv.setBackgroundColor(0x00000000);
-        wv.setLayerType(View.LAYER_TYPE_HARDWARE,null);
-        wv.addJavascriptInterface(new Bridge(),"EyeScroll");
-        wv.setWebChromeClient(new WebChromeClient(){
-            @Override public void onPermissionRequest(PermissionRequest r){
-                r.grant(r.getResources());
-            }
-        });
-        int type=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:
-            WindowManager.LayoutParams.TYPE_PHONE;
-        WindowManager.LayoutParams p=new WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT);
-        wm.addView(wv,p);
-        wv.setVisibility(View.VISIBLE);
-        wv.loadUrl("file:///android_asset/eyetracker.html");
-    }
-    private class Bridge{
-        @JavascriptInterface public void onGesture(int code){
-            long now=System.currentTimeMillis();
-            if(now-lastGesture<COOLDOWN)return;
-            lastGesture=now;
-            EyeAccessibilityService svc=EyeAccessibilityService.getInstance();
-            if(svc!=null&&Build.VERSION.SDK_INT>=Build.VERSION_CODES.N){
-                svc.performGesture(code);
-            }
-        }
-        @JavascriptInterface public void onCalibrationDone(){
-            if(wv==null||wm==null)return;
-            wv.post(()->{
-                WindowManager.LayoutParams lp=
-                    (WindowManager.LayoutParams)wv.getLayoutParams();
-                lp.flags|=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                wm.updateViewLayout(wv,lp);
-            });
-        }
-        @JavascriptInterface public void onCalibrationStart(){
-            if(wv==null||wm==null)return;
-            wv.post(()->{
-                WindowManager.LayoutParams lp=
-                    (WindowManager.LayoutParams)wv.getLayoutParams();
-                lp.flags&=~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
-                wm.updateViewLayout(wv,lp);
-            });
-        }
-        @JavascriptInterface public void log(String m){
-            android.util.Log.d("EyeScroll",m);
-        }
-        @JavascriptInterface public void stopService(){
-            teardown();
+    @Override public void onAccessibilityEvent(AccessibilityEvent e){}
+    @Override public void onInterrupt(){}
+    public void performGesture(int type){
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.N)return;
+        int[]sz=getScreenSize();
+        int W=sz[0],H=sz[1],cx=W/2,cy=H/2;
+        switch(type){
+            case GESTURE_SWIPE_DOWN:
+                doSwipe(cx,(int)(H*.75f),cx,(int)(H*.25f),350);break;
+            case GESTURE_SWIPE_UP:
+                doSwipe(cx,(int)(H*.25f),cx,(int)(H*.75f),350);break;
+            case GESTURE_TAP:doTap(cx,cy);break;
+            case GESTURE_DOUBLE_TAP:doDoubleTap(cx,cy);break;
+            case GESTURE_SUBSCRIBE:doTap(cx,(int)(H*.85f));break;
         }
     }
-    private void teardown(){
-        running=false;
-        if(wv!=null){
-            try{
-                wv.loadUrl("about:blank");
-                wv.destroy();
-            }catch(Exception e){}
-            wv=null;
-        }
-        if(wm!=null){
-            try{wm.removeView(wv);}catch(Exception e){}
-        }
-        stopForeground(true);
-        stopSelf();
+    private void doSwipe(int x1,int y1,int x2,int y2,long d){
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.N)return;
+        Path p=new Path();p.moveTo(x1,y1);p.lineTo(x2,y2);
+        dispatchGesture(new GestureDescription.Builder()
+            .addStroke(new GestureDescription.StrokeDescription(p,0,d))
+            .build(),null,null);
     }
-                    }
+    private void doTap(int x,int y){
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.N)return;
+        Path p=new Path();p.moveTo(x,y);
+        dispatchGesture(new GestureDescription.Builder()
+            .addStroke(new GestureDescription.StrokeDescription(p,0,100))
+            .build(),null,null);
+    }
+    private void doDoubleTap(int x,int y){
+        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.N)return;
+        Path p1=new Path();p1.moveTo(x,y);
+        Path p2=new Path();p2.moveTo(x,y);
+        dispatchGesture(new GestureDescription.Builder()
+            .addStroke(new GestureDescription.StrokeDescription(p1,0,100))
+            .addStroke(new GestureDescription.StrokeDescription(p2,250,100))
+            .build(),null,null);
+    }
+    private int[]getScreenSize(){
+        WindowManager wm=(WindowManager)getSystemService(Context.WINDOW_SERVICE);
+        DisplayMetrics dm=new DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(dm);
+        return new int[]{dm.widthPixels,dm.heightPixels};
+    }
+}
