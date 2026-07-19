@@ -174,11 +174,9 @@ public class MainActivity extends AppCompatActivity {
          */
         @android.webkit.JavascriptInterface
         public void onGaze(float x, float y){
-            // Send gaze to overlay via runOnUiThread
-            runOnUiThread(()->{
-                EyeOverlayService svc=EyeOverlayService.getInstance();
-                if(svc!=null) svc.moveCursor(x,y);
-            });
+            // Direct call - works from any thread
+            EyeOverlayService svc=EyeOverlayService.getInstance();
+            if(svc!=null) svc.moveCursor(x,y);
         }
 
         @android.webkit.JavascriptInterface
@@ -198,7 +196,9 @@ public class MainActivity extends AppCompatActivity {
 
         @android.webkit.JavascriptInterface
         public void onGesture(int code){
-            // Gestures during calibration ignored
+            // Forward blink gestures to overlay service
+            EyeOverlayService svc=EyeOverlayService.getInstance();
+            if(svc!=null) svc.onBlinkGesture(code);
         }
 
         @android.webkit.JavascriptInterface
@@ -242,4 +242,4 @@ public class MainActivity extends AppCompatActivity {
         startService(i);
         updateStatuses();
     }
-}
+    }
