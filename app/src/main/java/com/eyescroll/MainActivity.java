@@ -174,12 +174,9 @@ public class MainActivity extends AppCompatActivity {
          */
         @android.webkit.JavascriptInterface
         public void onGaze(float x, float y){
-            // Forward gaze to overlay cursor
-            Intent i=new Intent(MainActivity.this,EyeOverlayService.class);
-            i.setAction(EyeOverlayService.ACTION_GAZE);
-            i.putExtra(EyeOverlayService.EXTRA_X,x);
-            i.putExtra(EyeOverlayService.EXTRA_Y,y);
-            startService(i);
+            // Direct call - much faster than Intent
+            EyeOverlayService svc=EyeOverlayService.getInstance();
+            if(svc!=null) svc.moveCursor(x,y);
         }
 
         @android.webkit.JavascriptInterface
@@ -243,4 +240,4 @@ public class MainActivity extends AppCompatActivity {
         startService(i);
         updateStatuses();
     }
-}
+            }
