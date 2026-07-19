@@ -7,13 +7,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
-import android.view.ViewGroup;
-import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
@@ -26,10 +20,6 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView statusCamera,statusOverlay,statusAccessibility;
     private Button btnLaunch,btnStop;
-    private FrameLayout calibContainer;
-    private WebView calibWebView;
-    private View mainLayout;
-    private boolean calibrationDone=false;
 
     private final ActivityResultLauncher<String> cameraLauncher=
         registerForActivityResult(new ActivityResultContracts.RequestPermission(),
@@ -44,24 +34,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle s){
         super.onCreate(s);
-
-        FrameLayout root=new FrameLayout(this);
-        root.setBackgroundColor(0xFF040D1A);
-
-        View main=getLayoutInflater().inflate(R.layout.activity_main,root,false);
-        root.addView(main);
-        mainLayout=main;
-
-        calibContainer=new FrameLayout(this);
-        calibContainer.setLayoutParams(new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT));
-        calibContainer.setVisibility(View.GONE);
-        calibContainer.setBackgroundColor(0xFF040D1A);
-        root.addView(calibContainer);
-
-        setContentView(root);
-
+        setContentView(R.layout.activity_main);
         statusCamera=findViewById(R.id.status_camera);
         statusOverlay=findViewById(R.id.status_overlay);
         statusAccessibility=findViewById(R.id.status_accessibility);
@@ -69,21 +42,19 @@ public class MainActivity extends AppCompatActivity {
         btnStop=findViewById(R.id.btn_stop);
         btnLaunch.setOnClickListener(v->onLaunch());
         btnStop.setOnClickListener(v->stopEyeScroll());
+
+        // Check if returning from calibration done
+        if("com.eyescroll.CALIB_DONE".equals(getIntent().getAction())){
+            Toast.makeText(this,
+                "Calibration done! Open YouTube and control with eyes!",
+                Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
     protected void onResume(){
         super.onResume();
         updateStatuses();
-    }
-
-    @Override
-    protected void onDestroy(){
-        super.onDestroy();
-        if(calibWebView!=null){
-            calibWebView.destroy();
-            calibWebView=null;
-        }
     }
 
     private void updateStatuses(){
@@ -125,118 +96,17 @@ public class MainActivity extends AppCompatActivity {
                         new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
                 .show();return;
         }
-        showCalibration();
-    }
-
-    private void showCalibration(){
-        // Start overlay service FIRST (cursor appears)
-        startOverlayService();
-
-        // Then show calibration WebView inside app
-        if(calibWebView!=null){
-            calibWebView.destroy();
-            calibWebView=null;
-        }
-        calibWebView=new WebView(this);
-        WebSettings ws=calibWebView.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setMediaPlaybackRequiresUserGesture(false);
-        ws.setAllowFileAccessFromFileURLs(true);
-        ws.setAllowUniversalAccessFromFileURLs(true);
-        ws.setDomStorageEnabled(true);
-        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        calibWebView.setLayerType(View.LAYER_TYPE_HARDWARE,null);
-
-        calibWebView.setWebChromeClient(new WebChromeClient(){
-            @Override
-            public void onPermissionRequest(PermissionRequest r){
-                runOnUiThread(()->r.grant(r.getResources()));
-            }
-        });
-
-        calibWebView.addJavascriptInterface(new CalibBridge(),"EyeScroll");
-
-        calibContainer.removeAllViews();
-        calibContainer.addView(calibWebView,new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT));
-        calibContainer.setVisibility(View.VISIBLE);
-        mainLayout.setVisibility(View.GONE);
-
-        calibWebView.loadUrl("file:///android_asset/eyetracker.html");
-    }
-
-    private class CalibBridge{
-
-        /*
-         * Called every gaze frame from WebGazer.
-         * Forwards coordinates to overlay service → cursor moves.
-         */
-        @android.webkit.JavascriptInterface
-        public void onGaze(float x, float y){
-            // Direct call - works from any thread
-            EyeOverlayService svc=EyeOverlayService.getInstance();
-            if(svc!=null) svc.moveCursor(x,y);
-        }
-
-        @android.webkit.JavascriptInterface
-        public void onCalibrationDone(){
-            runOnUiThread(()->{
-                calibrationDone=true;
-                // Hide calibration, minimize app
-                calibContainer.setVisibility(View.GONE);
-                mainLayout.setVisibility(View.VISIBLE);
-                moveTaskToBack(true);
-                updateStatuses();
-                Toast.makeText(MainActivity.this,
-                    "Calibration done! EyeScroll is active.",
-                    Toast.LENGTH_LONG).show();
-            });
-        }
-
-        @android.webkit.JavascriptInterface
-        public void onGesture(int code){
-            // Trigger gesture directly via accessibility service
-            EyeAccessibilityService acc=EyeAccessibilityService.getInstance();
-            if(acc!=null&&android.os.Build.VERSION.SDK_INT>=
-               android.os.Build.VERSION_CODES.N){
-                acc.performGesture(code);
-            }
-        }
-
-        @android.webkit.JavascriptInterface
-        public void onCalibrationStart(){}
-
-        @android.webkit.JavascriptInterface
-        public void log(String m){
-            android.util.Log.d("EyeScroll",m);
-        }
-
-        @android.webkit.JavascriptInterface
-        public void stopService(){
-            runOnUiThread(()->{
-                calibContainer.setVisibility(View.GONE);
-                mainLayout.setVisibility(View.VISIBLE);
-                updateStatuses();
-            });
-        }
-
-        @android.webkit.JavascriptInterface
-        public void launchOverlay(){
-            runOnUiThread(()->{
-                calibContainer.setVisibility(View.GONE);
-                mainLayout.setVisibility(View.VISIBLE);
-                moveTaskToBack(true);
-            });
-        }
-    }
-
-    private void startOverlayService(){
+        // Start service - it handles camera + WebGazer + cursor
         Intent i=new Intent(this,EyeOverlayService.class);
         i.setAction(EyeOverlayService.ACTION_START);
         if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O)
             startForegroundService(i);
         else startService(i);
+        Toast.makeText(this,
+            "EyeScroll starting - calibrate your eyes then open YouTube!",
+            Toast.LENGTH_LONG).show();
+        moveTaskToBack(true);
+        updateStatuses();
     }
 
     private void stopEyeScroll(){
