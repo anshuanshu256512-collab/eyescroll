@@ -48,13 +48,12 @@ public class EyeOverlayService extends Service {
         } else if(ACTION_STOP.equals(action)){
             teardown();
         } else if(ACTION_GAZE.equals(action)&&wv!=null){
-            // Receive gaze coordinates from MainActivity
-            float x=i.getFloatExtra(EXTRA_X,0);
-            float y=i.getFloatExtra(EXTRA_Y,0);
-            // Send to overlay cursor
-            wv.post(()->wv.evaluateJavascript(
-                "if(window.moveCursor)window.moveCursor("+x+","+y+")",
-                null));
+            final float x=i.getFloatExtra(EXTRA_X,0);
+            final float y=i.getFloatExtra(EXTRA_Y,0);
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                .post(()->wv.evaluateJavascript(
+                    "if(window.moveCursor)window.moveCursor("+x+","+y+")",
+                    null));
         }
         return START_NOT_STICKY;
     }
@@ -113,7 +112,21 @@ public class EyeOverlayService extends Service {
             PixelFormat.TRANSLUCENT);
 
         wm.addView(wv,p);
-        wv.loadUrl("file:///android_asset/cursor_overlay.html");
+
+        // Small delay to ensure window is attached before loading
+        new android.os.Handler(android.os.Looper.getMainLooper())
+            .postDelayed(()->
+                wv.loadUrl("file:///android_asset/cursor_overlay.html"),
+            300);
+    }
+
+    // Called directly from MainActivity
+    public void moveCursor(float x, float y){
+        if(wv==null)return;
+        new android.os.Handler(android.os.Looper.getMainLooper())
+            .post(()->wv.evaluateJavascript(
+                "if(window.moveCursor)window.moveCursor("+x+","+y+")",
+                null));
     }
 
     private class CursorBridge{
@@ -180,4 +193,4 @@ public class EyeOverlayService extends Service {
         stopForeground(true);
         stopSelf();
     }
-}
+            }
