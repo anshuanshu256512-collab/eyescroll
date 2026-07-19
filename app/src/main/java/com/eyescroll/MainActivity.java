@@ -196,9 +196,12 @@ public class MainActivity extends AppCompatActivity {
 
         @android.webkit.JavascriptInterface
         public void onGesture(int code){
-            // Forward blink gestures to overlay service
-            EyeOverlayService svc=EyeOverlayService.getInstance();
-            if(svc!=null) svc.onBlinkGesture(code);
+            // Trigger gesture directly via accessibility service
+            EyeAccessibilityService acc=EyeAccessibilityService.getInstance();
+            if(acc!=null&&android.os.Build.VERSION.SDK_INT>=
+               android.os.Build.VERSION_CODES.N){
+                acc.performGesture(code);
+            }
         }
 
         @android.webkit.JavascriptInterface
