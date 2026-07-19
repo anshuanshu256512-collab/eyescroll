@@ -10,7 +10,9 @@ html,body{
   width:100%;height:100%;
   background:transparent !important;
   overflow:hidden;
-  pointer-events:none;
+  pointer-events:none !important;
+  -webkit-user-select:none;
+  user-select:none;
 }
 
 /* Arrow cursor */
@@ -79,21 +81,10 @@ html,body{
 #zone-up.active{border-bottom-color:rgba(0,195,255,0.5);}
 #zone-down.active{border-top-color:rgba(0,195,255,0.5);}
 
-/* Stop button */
+/* Stop button - hidden, use notification bar stop instead */
 #stop-btn{
-  position:fixed;
-  top:8px;right:8px;
-  background:rgba(255,50,50,0.9);
-  color:white;
-  border:none;
-  padding:8px 14px;
-  border-radius:20px;
-  font-size:13px;
-  font-weight:bold;
-  z-index:999999;
-  pointer-events:auto;
-  font-family:sans-serif;
-  cursor:pointer;
+  display:none;
+  pointer-events:none;
 }
 </style>
 </head>
@@ -129,10 +120,10 @@ html,body{
 </svg>
 
 <!-- Badge -->
-<div id="badge">ðŸ‘ EyeScroll Active</div>
+<div id="badge">👁 EyeScroll Active</div>
 
 <!-- Stop button -->
-<button id="stop-btn" onclick="stopEyeScroll()">â–  Stop</button>
+<button id="stop-btn" onclick="stopEyeScroll()">■ Stop</button>
 
 <!-- Toast -->
 <div id="toast"></div>
@@ -140,9 +131,9 @@ html,body{
 <script>
 'use strict';
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    ANDROID BRIDGE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 var IS_ANDROID=(typeof window.EyeScroll!=='undefined');
 function bridge(m,a){
   if(!IS_ANDROID)return;
@@ -150,9 +141,9 @@ function bridge(m,a){
 }
 function stopEyeScroll(){ bridge('stopService'); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    ONE EURO FILTER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 function OEF(freq,mco,beta,dco){
   var xp=null,dxp=0,tp=null;
   function alpha(co){var r=2*Math.PI*co/freq;return r/(r+1);}
@@ -174,9 +165,9 @@ var fX=OEF(30,0.5,0.07,1.0);
 var fY=OEF(30,0.5,0.07,1.0);
 var lastCX=null,lastCY=null,DEAD=4;
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    BLINK DETECTION
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 var EAR_TH=0.20,EAR_FR=2,BLINK_GAP=700,BLINK_MAX=400;
 var earC=0,blinkN=0,blinkT=null,eyeC=false,eyeCT=0;
 
@@ -212,14 +203,14 @@ function processBlink(pts){
 }
 function fireBlink(){
   var c=blinkN;blinkN=0;
-  if(c===1) sendGesture(3,'â¸ Pause/Play');
-  else if(c===2) sendGesture(4,'â¤ Like');
-  else if(c>=3) sendGesture(5,'ðŸ”” Subscribe');
+  if(c===1) sendGesture(3,'⏸ Pause/Play');
+  else if(c===2) sendGesture(4,'❤ Like');
+  else if(c>=3) sendGesture(5,'🔔 Subscribe');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    GAZE ZONE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 var UP=0.28,DOWN=0.72,DWELL=600,SCD=1500;
 var cZone='centre',zT=0,zFired=false,lastS=0,zRT=null;
 var zoneUpEl,zoneDnEl;
@@ -239,8 +230,8 @@ function processZone(x,y){
   if(!zFired&&z!=='centre'){
     if(now-zT>=DWELL&&now-lastS>SCD){
       zFired=true;lastS=now;
-      if(z==='up')sendGesture(2,'â¬† Prev Reel');
-      else sendGesture(1,'â¬‡ Next Reel');
+      if(z==='up')sendGesture(2,'⬆ Prev Reel');
+      else sendGesture(1,'⬇ Next Reel');
       zRT=setTimeout(function(){
         cZone='centre';zFired=false;
         zoneUpEl.classList.remove('active');
@@ -250,9 +241,9 @@ function processZone(x,y){
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    GESTURE + TOAST
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 var GCD=1200,lastG=0,toastT;
 function sendGesture(code,label){
   var now=Date.now();
@@ -265,10 +256,10 @@ function sendGesture(code,label){
   bridge('onGesture',code);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    CURSOR MOVEMENT
    Called from Android Java via evaluateJavascript
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 window.moveCursor=function(x,y){
   var now=Date.now();
   var sx=fX.filter(x,now);
@@ -285,10 +276,10 @@ window.moveCursor=function(x,y){
   processZone(cx,cy);
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════
    BLINK TRIGGER
    Called from Android Java
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+════════════════════════════════ */
 window.triggerBlink=function(earValue){
   /* Accept EAR value from Java blink detector */
   if(typeof earValue==='number'){
