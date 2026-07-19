@@ -12,10 +12,18 @@ public class EyeOverlayService extends Service {
 
     public static final String ACTION_START="com.eyescroll.START";
     public static final String ACTION_STOP="com.eyescroll.STOP";
+    // Gaze data passed from MainActivity calibration WebView
+    public static final String ACTION_GAZE="com.eyescroll.GAZE";
+    public static final String EXTRA_X="gaze_x";
+    public static final String EXTRA_Y="gaze_y";
+
     private static final String CH_ID="eyescroll_fg";
     private static final int NID=1001;
     private static boolean running=false;
+    private static EyeOverlayService instance=null;
+
     public static boolean isRunning(){return running;}
+    public static EyeOverlayService getInstance(){return instance;}
 
     private WindowManager wm;
     private WebView wv;
@@ -25,18 +33,28 @@ public class EyeOverlayService extends Service {
     @Override
     public void onCreate(){
         super.onCreate();
+        instance=this;
         wm=(WindowManager)getSystemService(WINDOW_SERVICE);
     }
 
     @Override
     public int onStartCommand(Intent i,int f,int id){
         if(i==null)return START_NOT_STICKY;
-        if(ACTION_START.equals(i.getAction())&&!running){
+        String action=i.getAction();
+        if(ACTION_START.equals(action)&&!running){
             startFg();
             createOverlay();
             running=true;
-        } else if(ACTION_STOP.equals(i.getAction())){
+        } else if(ACTION_STOP.equals(action)){
             teardown();
+        } else if(ACTION_GAZE.equals(action)&&wv!=null){
+            // Receive gaze coordinates from MainActivity
+            float x=i.getFloatExtra(EXTRA_X,0);
+            float y=i.getFloatExtra(EXTRA_Y,0);
+            // Send to overlay cursor
+            wv.post(()->wv.evaluateJavascript(
+                "if(window.moveCursor)window.moveCursor("+x+","+y+")",
+                null));
         }
         return START_NOT_STICKY;
     }
@@ -56,19 +74,16 @@ public class EyeOverlayService extends Service {
         PendingIntent pi=PendingIntent.getService(this,0,si,
             PendingIntent.FLAG_IMMUTABLE|
             PendingIntent.FLAG_UPDATE_CURRENT);
-
         Intent open=new Intent(this,MainActivity.class);
         PendingIntent openPi=PendingIntent.getActivity(this,1,open,
             PendingIntent.FLAG_IMMUTABLE);
-
         startForeground(NID,new NotificationCompat.Builder(this,CH_ID)
-            .setContentTitle("👁 EyeScroll Active")
-            .setContentText("Eye control running — tap to open app")
+            .setContentTitle("EyeScroll Active")
+            .setContentText("Eye control running - tap Stop to exit")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentIntent(openPi)
             .addAction(android.R.drawable.ic_delete,"Stop",pi)
-            .setOngoing(true)
-            .build());
+            .setOngoing(true).build());
     }
 
     private void createOverlay(){
@@ -78,19 +93,9 @@ public class EyeOverlayService extends Service {
         ws.setAllowFileAccessFromFileURLs(true);
         ws.setAllowUniversalAccessFromFileURLs(true);
         ws.setDomStorageEnabled(true);
-
-        // Transparent background
         wv.setBackgroundColor(0x00000000);
         wv.setLayerType(View.LAYER_TYPE_HARDWARE,null);
-
         wv.addJavascriptInterface(new CursorBridge(),"EyeScroll");
-
-        wv.setWebChromeClient(new WebChromeClient(){
-            @Override
-            public void onPermissionRequest(PermissionRequest r){
-                r.grant(r.getResources());
-            }
-        });
 
         int type=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:
@@ -100,28 +105,18 @@ public class EyeOverlayService extends Service {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             type,
-            // KEY: Touch passes through to YouTube/Instagram
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT);
 
         wm.addView(wv,p);
-
-        // Load cursor-only overlay (no WebGazer, no internet needed)
         wv.loadUrl("file:///android_asset/cursor_overlay.html");
     }
 
-    // Move cursor from gaze data
-    public void moveCursor(float x, float y){
-        if(wv==null)return;
-        wv.post(()->wv.evaluateJavascript(
-            "window.moveCursor("+x+","+y+")",null));
-    }
-
     private class CursorBridge{
-
         @JavascriptInterface
         public void onGesture(int code){
             long now=System.currentTimeMillis();
@@ -135,10 +130,8 @@ public class EyeOverlayService extends Service {
             }
             vibrate(code);
         }
-
         @JavascriptInterface
-        public void stopService(){ teardown(); }
-
+        public void stopService(){teardown();}
         @JavascriptInterface
         public void log(String m){
             android.util.Log.d("EyeScroll",m);
@@ -159,10 +152,10 @@ public class EyeOverlayService extends Service {
             if(v==null)return;
             long[]pat;
             switch(code){
-                case 1:case 2: pat=new long[]{0,60}; break;
-                case 3: pat=new long[]{0,80}; break;
-                case 4: pat=new long[]{0,60,80,60}; break;
-                default: pat=new long[]{0,60,60,60,60,60}; break;
+                case 1:case 2:pat=new long[]{0,60};break;
+                case 3:pat=new long[]{0,80};break;
+                case 4:pat=new long[]{0,60,80,60};break;
+                default:pat=new long[]{0,60,60,60,60,60};break;
             }
             if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
                 v.vibrate(android.os.VibrationEffect
@@ -175,11 +168,10 @@ public class EyeOverlayService extends Service {
 
     private void teardown(){
         running=false;
+        instance=null;
         if(wv!=null){
-            try{
-                wv.loadUrl("about:blank");
-                wv.destroy();
-            }catch(Exception e){}
+            try{wv.loadUrl("about:blank");wv.destroy();}
+            catch(Exception e){}
             if(wm!=null){
                 try{wm.removeView(wv);}catch(Exception e){}
             }
