@@ -3,6 +3,7 @@ import android.app.*;
 import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.os.*;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.*;
@@ -22,10 +23,12 @@ public class EyeOverlayService extends Service {
     public static EyeOverlayService getInstance(){return instance;}
 
     private WindowManager wm;
-    private WebView wv;        // WebView runs IN the service - always alive
-    private View cursorView;   // Transparent cursor overlay
+    private WebView wv;           // WebView - fullscreen during calib, tiny after
+    private View cursorView;      // Arrow cursor - shown after calibration
+    private WindowManager.LayoutParams wvParams;  // WebView window params
     private android.graphics.Paint paint;
     private float cursorX=200, cursorY=400;
+    private boolean calibrationComplete=false;
     private long lastGesture=0;
     private static final long COOLDOWN=1200;
     private float UP_ZONE=0.28f, DOWN_ZONE=0.72f;
@@ -48,7 +51,7 @@ public class EyeOverlayService extends Service {
         if(i==null)return START_NOT_STICKY;
         if(ACTION_START.equals(i.getAction())&&!running){
             startFg();
-            createCursorOverlay();
+            createViews();
             running=true;
         } else if(ACTION_STOP.equals(i.getAction())){
             teardown();
@@ -71,48 +74,19 @@ public class EyeOverlayService extends Service {
         PendingIntent pi=PendingIntent.getService(this,0,si,
             PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         startForeground(NID,new NotificationCompat.Builder(this,CH_ID)
-            .setContentTitle("EyeScroll Active")
-            .setContentText("Eye tracking running - tap Stop to exit")
+            .setContentTitle("EyeScroll - Calibrating...")
+            .setContentText("Look at the dots to calibrate")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .addAction(android.R.drawable.ic_delete,"Stop",pi)
             .setOngoing(true).build());
     }
 
-    /* ── Step 1: Create transparent cursor view ── */
-    private void createCursorOverlay(){
-        paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-
-        cursorView=new View(this){
-            @Override protected void onDraw(android.graphics.Canvas c){
-                super.onDraw(c);
-                drawArrow(c);
-            }
-        };
-
+    private void createViews(){
         int type=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:
             WindowManager.LayoutParams.TYPE_PHONE;
 
-        WindowManager.LayoutParams p=new WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            PixelFormat.TRANSLUCENT);
-
-        wm.addView(cursorView,p);
-
-        /* ── Step 2: Start WebView for eye tracking INSIDE service ── */
-        new Handler(Looper.getMainLooper()).postDelayed(
-            this::startEyeTrackingWebView, 500);
-    }
-
-    /* ── WebView runs inside foreground service = never paused ── */
-    private void startEyeTrackingWebView(){
+        // ── Step 1: Create FULLSCREEN WebView for calibration ──
         wv=new WebView(this);
         WebSettings ws=wv.getSettings();
         ws.setJavaScriptEnabled(true);
@@ -122,33 +96,92 @@ public class EyeOverlayService extends Service {
         ws.setDomStorageEnabled(true);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         wv.setLayerType(View.LAYER_TYPE_HARDWARE,null);
-        wv.setBackgroundColor(0x00000000);
-
+        wv.setBackgroundColor(0xFF040D1A);
+        wv.addJavascriptInterface(new EyeBridge(),"EyeScroll");
         wv.setWebChromeClient(new WebChromeClient(){
             @Override public void onPermissionRequest(PermissionRequest r){
                 r.grant(r.getResources());
             }
         });
 
-        wv.addJavascriptInterface(new EyeBridge(),"EyeScroll");
+        // Fullscreen + TOUCHABLE during calibration
+        wvParams=new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.OPAQUE);
+        wm.addView(wv,wvParams);
+        wv.loadUrl("file:///android_asset/eyetracker.html");
 
-        /* Add WebView to window - small size, hidden in corner */
-        int type=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY:
-            WindowManager.LayoutParams.TYPE_PHONE;
+        // ── Step 2: Create transparent cursor view (hidden until calib done) ──
+        paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        cursorView=new View(this){
+            @Override protected void onDraw(android.graphics.Canvas c){
+                super.onDraw(c);
+                drawArrow(c);
+            }
+        };
+        cursorView.setVisibility(View.INVISIBLE);
 
-        WindowManager.LayoutParams wp=new WindowManager.LayoutParams(
-            1,1,  /* 1x1 pixel - invisible but active */
+        WindowManager.LayoutParams cp=new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT);
-        wp.gravity=android.view.Gravity.TOP|android.view.Gravity.START;
-        wp.x=0; wp.y=0;
+        wm.addView(cursorView,cp);
+    }
 
-        wm.addView(wv,wp);
-        wv.loadUrl("file:///android_asset/eyetracker.html");
+    private void onCalibrationComplete(){
+        calibrationComplete=true;
+
+        // Update notification
+        updateNotification("EyeScroll Active - Eye tracking running");
+
+        // Shrink WebView to 1x1 invisible - keeps WebGazer running!
+        new Handler(Looper.getMainLooper()).post(()->{
+            if(wv==null||wm==null)return;
+            try{
+                wvParams.width=1;
+                wvParams.height=1;
+                wvParams.gravity=Gravity.TOP|Gravity.START;
+                wvParams.x=0; wvParams.y=0;
+                // Make it touch-transparent now
+                wvParams.flags=
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+                wv.setBackgroundColor(0x00000000);
+                wm.updateViewLayout(wv,wvParams);
+            }catch(Exception e){}
+
+            // Show cursor
+            if(cursorView!=null)
+                cursorView.setVisibility(View.VISIBLE);
+        });
+    }
+
+    private void updateNotification(String text){
+        Intent si=new Intent(this,EyeOverlayService.class);
+        si.setAction(ACTION_STOP);
+        PendingIntent pi=PendingIntent.getService(this,0,si,
+            PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n=new NotificationCompat.Builder(this,CH_ID)
+            .setContentTitle("EyeScroll Active")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .addAction(android.R.drawable.ic_delete,"Stop",pi)
+            .setOngoing(true).build();
+        NotificationManager nm=getSystemService(NotificationManager.class);
+        nm.notify(NID,n);
     }
 
     private void drawArrow(android.graphics.Canvas c){
@@ -173,16 +206,29 @@ public class EyeOverlayService extends Service {
     }
 
     private class EyeBridge{
-        /* Called every gaze frame from WebGazer */
+
         @JavascriptInterface
         public void onGaze(float x,float y){
+            if(!calibrationComplete)return;
             cursorX=x; cursorY=y;
             if(cursorView!=null) cursorView.postInvalidate();
             processZone(x,y);
         }
 
         @JavascriptInterface
+        public void onCalibrationDone(){
+            onCalibrationComplete();
+            // Tell user to open YouTube
+            new Handler(Looper.getMainLooper()).post(()->
+                android.widget.Toast.makeText(
+                    EyeOverlayService.this,
+                    "Calibration done! Open YouTube or Instagram now.",
+                    android.widget.Toast.LENGTH_LONG).show());
+        }
+
+        @JavascriptInterface
         public void onGesture(int code){
+            if(!calibrationComplete)return;
             long now=System.currentTimeMillis();
             if(now-lastGesture<COOLDOWN)return;
             lastGesture=now;
@@ -190,25 +236,16 @@ public class EyeOverlayService extends Service {
         }
 
         @JavascriptInterface
-        public void onCalibrationDone(){
-            /* Notify MainActivity calibration is done */
-            Intent i=new Intent(EyeOverlayService.this,MainActivity.class);
-            i.setAction("com.eyescroll.CALIB_DONE");
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        }
-
-        @JavascriptInterface
         public void onCalibrationStart(){}
 
         @JavascriptInterface
-        public void stopService(){ teardown(); }
+        public void stopService(){teardown();}
 
         @JavascriptInterface
-        public void log(String m){ android.util.Log.d("EyeScroll",m); }
+        public void log(String m){android.util.Log.d("EyeScroll",m);}
 
         @JavascriptInterface
-        public void launchOverlay(){}
+        public void launchOverlay(){ onCalibrationComplete(); }
     }
 
     private void processZone(float x,float y){
@@ -278,4 +315,4 @@ public class EyeOverlayService extends Service {
         }
         stopForeground(true);stopSelf();
     }
-}
+    }
