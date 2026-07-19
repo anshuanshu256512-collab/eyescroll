@@ -14,7 +14,7 @@ html,body{
   font-family:'Segoe UI',sans-serif;
 }
 
-/* â”€â”€ SCREENS â”€â”€ */
+/* ── SCREENS ── */
 .screen{
   position:fixed;top:0;left:0;
   width:100%;height:100%;
@@ -26,7 +26,7 @@ html,body{
 }
 .screen.active{display:flex;}
 
-/* â”€â”€ LOADING â”€â”€ */
+/* ── LOADING ── */
 #loading-screen{background:#040D1A;gap:16px;text-align:center;}
 .spinner{
   width:52px;height:52px;
@@ -39,7 +39,7 @@ html,body{
 #loading-screen h2{color:#00C3FF;font-size:22px;margin-top:8px;}
 #loading-msg{color:#8AAFC8;font-size:14px;}
 
-/* â”€â”€ FACE CHECK â”€â”€ */
+/* ── FACE CHECK ── */
 #face-screen{background:#040D1A;gap:20px;text-align:center;}
 #face-screen h2{color:#00C3FF;font-size:22px;}
 #face-screen p{color:#8AAFC8;font-size:14px;max-width:300px;}
@@ -71,7 +71,7 @@ html,body{
 }
 #btn-start-calib.ready{opacity:1;pointer-events:auto;}
 
-/* â”€â”€ CALIBRATION â”€â”€ */
+/* ── CALIBRATION ── */
 #calib-screen{background:#040D1A;}
 #dot-host{
   position:fixed;
@@ -117,7 +117,7 @@ html,body{
   pointer-events:none;
 }
 
-/* â”€â”€ DONE SCREEN â”€â”€ */
+/* ── DONE SCREEN ── */
 #done-screen{background:#040D1A;gap:20px;text-align:center;}
 #done-screen h2{color:#00DFA0;font-size:24px;}
 #done-screen p{color:#8AAFC8;font-size:14px;max-width:300px;}
@@ -158,15 +158,15 @@ html,body{
 <!-- LOADING -->
 <div id="loading-screen" class="screen active">
   <div class="spinner"></div>
-  <h2>ðŸ‘ EyeScroll</h2>
-  <p id="loading-msg">Initialising cameraâ€¦</p>
+  <h2>👁 EyeScroll</h2>
+  <p id="loading-msg">Initialising camera…</p>
 </div>
 
 <!-- FACE CHECK -->
 <div id="face-screen" class="screen">
-  <h2>ðŸ‘ Position Your Face</h2>
+  <h2>👁 Position Your Face</h2>
   <p>Look directly at the camera. Make sure your face is clearly visible.</p>
-  <div id="face-status">ðŸ” Scanning for faceâ€¦</div>
+  <div id="face-status">🔍 Scanning for face…</div>
   <button id="btn-start-calib">Begin Calibration</button>
   <p style="color:#4d7090;font-size:12px;">Keep your head still during calibration</p>
 </div>
@@ -177,16 +177,16 @@ html,body{
     <div class="dot-ring"></div>
     <div class="dot-core"></div>
   </div>
-  <div id="calib-hint">Look at the dot â€” keep your gaze there</div>
+  <div id="calib-hint">Look at the dot — keep your gaze there</div>
   <div id="calib-progress">Point 1 of 9</div>
 </div>
 
 <!-- DONE -->
 <div id="done-screen" class="screen">
-  <h2>âœ… Calibration Complete!</h2>
+  <h2>✅ Calibration Complete!</h2>
   <p>Now open YouTube, Instagram or Facebook.<br/>EyeScroll will control scrolling with your eyes.</p>
   <button id="btn-launch-overlay" onclick="launchOverlay()">
-    ðŸš€ Launch Eye Control
+    🚀 Launch Eye Control
   </button>
   <p style="color:#4d7090;font-size:12px;margin-top:8px;">
     Look UP = Previous reel &nbsp;|&nbsp; Look DOWN = Next reel<br/>
@@ -197,14 +197,14 @@ html,body{
 <script>
 'use strict';
 
-/* â”€â”€ Android Bridge â”€â”€ */
+/* ── Android Bridge ── */
 var IS_ANDROID=(typeof window.EyeScroll!=='undefined');
 function bridge(m,a){
   if(!IS_ANDROID)return;
   try{ a!==undefined?window.EyeScroll[m](a):window.EyeScroll[m](); }catch(e){}
 }
 
-/* â”€â”€ Screens â”€â”€ */
+/* ── Screens ── */
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(function(s){
     s.classList.remove('active');
@@ -213,7 +213,7 @@ function showScreen(id){
   if(el)el.classList.add('active');
 }
 
-/* â”€â”€ Calibration points â”€â”€ */
+/* ── Calibration points ── */
 var PTS=[
   [0.1,0.1],[0.5,0.1],[0.9,0.1],
   [0.1,0.5],[0.5,0.5],[0.9,0.5],
@@ -262,25 +262,25 @@ function launchOverlay(){
   bridge('launchOverlay');
 }
 
-/* â”€â”€ Face detection â”€â”€ */
+/* ── Face detection ── */
 var faceOk=false, faceTimer=null, faceStreaking=false;
 
 function updateFaceStatus(detected){
   var el=document.getElementById('face-status');
   var btn=document.getElementById('btn-start-calib');
   if(detected){
-    el.textContent='âœ… Face detected â€” ready!';
+    el.textContent='✅ Face detected — ready!';
     el.className='good';
     btn.className='ready';
   } else {
-    el.textContent='ðŸ” Scanning for faceâ€¦';
+    el.textContent='🔍 Scanning for face…';
     el.className='';
     btn.className='';
     faceOk=false;
   }
 }
 
-/* â”€â”€ WebGazer init â”€â”€ */
+/* ── WebGazer init ── */
 window.onload=function(){
   if(typeof webgazer==='undefined'){
     document.getElementById('loading-msg').textContent=
@@ -290,6 +290,10 @@ window.onload=function(){
 
   webgazer
     .setGazeListener(function(data){
+      // Forward every gaze point to Android overlay cursor
+      if(data && typeof window.EyeScroll !== 'undefined'){
+        try{ window.EyeScroll.onGaze(data.x, data.y); }catch(e){}
+      }
       /* Face detection during face-screen */
       if(document.getElementById('face-screen').classList.contains('active')){
         if(data!==null){
@@ -318,7 +322,7 @@ window.onload=function(){
       webgazer.setRegression('ridge');
 
       document.getElementById('loading-msg').textContent=
-        'Camera ready â€” warming upâ€¦';
+        'Camera ready — warming up…';
 
       setTimeout(function(){
         webgazer.clearData();
@@ -338,4 +342,4 @@ window.onload=function(){
 };
 </script>
 </body>
-  </html>
+</html>
