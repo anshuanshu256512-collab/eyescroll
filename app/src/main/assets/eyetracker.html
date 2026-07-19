@@ -340,6 +340,117 @@ window.onload=function(){
       if(faceOk) startCalib();
     });
 };
+
+/* ════════════════════════════════════════
+   BLINK DETECTION + GESTURE SENDING
+   Added for Android EyeScroll
+════════════════════════════════════════ */
+var EAR_THRESH=0.20, EAR_FRAMES=2;
+var BLINK_GAP=700, BLINK_MAX=400;
+var earClosed=0, blinkCount=0, blinkTimer=null;
+var eyeWasClosed=false, eyeCloseTime=0;
+
+function earDist(pts,a,b){
+  if(!pts[a]||!pts[b])return 0;
+  var dx=pts[a][0]-pts[b][0],dy=pts[a][1]-pts[b][1];
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function calcEAR(pts,p1,p2,p3,p4,p5,p6){
+  var h=earDist(pts,p1,p4);
+  if(h<0.001)return 1;
+  return(earDist(pts,p2,p6)+earDist(pts,p3,p5))/(2*h);
+}
+function processBlink(pts){
+  if(!pts||pts.length<387)return;
+  var l=calcEAR(pts,133,159,158,145,144,33);
+  var r=calcEAR(pts,362,386,385,374,373,263);
+  var ear=(l+r)/2, now=Date.now();
+  if(ear<EAR_THRESH){
+    earClosed++;
+    if(!eyeWasClosed&&earClosed>=EAR_FRAMES){
+      eyeWasClosed=true; eyeCloseTime=now;
+    }
+  } else {
+    if(eyeWasClosed){
+      if(now-eyeCloseTime<BLINK_MAX){
+        blinkCount++;
+        clearTimeout(blinkTimer);
+        blinkTimer=setTimeout(fireBlinkGesture, BLINK_GAP);
+      }
+      eyeWasClosed=false;
+    }
+    earClosed=0;
+  }
+}
+function fireBlinkGesture(){
+  var c=blinkCount; blinkCount=0;
+  if(c===1) sendGesture(3);
+  else if(c===2) sendGesture(4);
+  else if(c>=3) sendGesture(5);
+}
+
+/* ── Gaze Zone Detection ── */
+var UP_Z=0.28, DOWN_Z=0.72, DWELL=700, SCD=1500;
+var cZone='centre', zTime=0, zFired=false, lastS=0;
+
+function processZone(x,y){
+  var H=window.innerHeight;
+  var zone=y<H*UP_Z?'up':y>H*DOWN_Z?'down':'centre';
+  var now=Date.now();
+  if(zone!==cZone){ cZone=zone; zTime=now; zFired=false; }
+  if(!zFired&&zone!=='centre'){
+    if(now-zTime>=DWELL&&now-lastS>SCD){
+      zFired=true; lastS=now;
+      sendGesture(zone==='up'?2:1);
+      setTimeout(function(){cZone='centre';zFired=false;},200);
+    }
+  }
+}
+
+/* ── Gesture Sender ── */
+var GCD=1200, lastG=0;
+function sendGesture(code){
+  var now=Date.now();
+  if(now-lastG<GCD)return;
+  lastG=now;
+  try{ window.EyeScroll.onGesture(code); }catch(e){}
+}
+
+/* ── Hook into WebGazer gaze listener ── */
+(function hookGaze(){
+  var t=setInterval(function(){
+    if(typeof webgazer==='undefined')return;
+    var orig=webgazer.setGazeListener;
+    if(!orig)return;
+    clearInterval(t);
+
+    /* Poll tracker for blink detection */
+    setInterval(function(){
+      try{
+        var tr=webgazer.getTracker&&webgazer.getTracker();
+        if(tr&&tr.positions) processBlink(tr.positions);
+      }catch(e){}
+    },33);
+
+    /* Hook cursor movement for zone detection */
+    var cursor=document.getElementById('eye-cursor');
+    if(cursor){
+      var origSet=Object.getOwnPropertyDescriptor(
+        CSSStyleDeclaration.prototype,'transform');
+      Object.defineProperty(cursor.style,'transform',{
+        set:function(val){
+          if(origSet&&origSet.set)origSet.set.call(this,val);
+          var m=val.match(/translate3d\(([0-9.]+)px,([0-9.]+)px/);
+          if(m) processZone(parseFloat(m[1]),parseFloat(m[2]));
+        },
+        get:function(){
+          return origSet&&origSet.get?origSet.get.call(this):'';
+        },
+        configurable:true
+      });
+    }
+  },500);
+})();
 </script>
 </body>
 </html>
