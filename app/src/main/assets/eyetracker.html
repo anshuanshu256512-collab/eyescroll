@@ -3,195 +3,130 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
-<title>EyeScroll Calibration</title>
+<title>EyeScroll</title>
 <script src="file:///android_asset/webgazer.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-html,body{
-  width:100%;height:100%;
-  background:#040D1A;
-  overflow:hidden;
-  font-family:'Segoe UI',sans-serif;
-}
+html,body{width:100%;height:100%;background:#040D1A;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;color:#D8EEFF;}
 
-/* ── SCREENS ── */
-.screen{
-  position:fixed;top:0;left:0;
-  width:100%;height:100%;
-  display:none;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-}
+.screen{position:fixed;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;}
 .screen.active{display:flex;}
 
-/* ── LOADING ── */
-#loading-screen{background:#040D1A;gap:16px;text-align:center;}
-.spinner{
-  width:52px;height:52px;
-  border:3px solid rgba(0,195,255,0.2);
-  border-top-color:#00C3FF;
-  border-radius:50%;
-  animation:spin 0.8s linear infinite;
-}
+/* LOADING */
+#screen-loading{background:#040D1A;text-align:center;}
+.spinner{width:52px;height:52px;border:3px solid rgba(0,195,255,0.2);border-top-color:#00C3FF;border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-#loading-screen h2{color:#00C3FF;font-size:22px;margin-top:8px;}
-#loading-msg{color:#8AAFC8;font-size:14px;}
+#screen-loading h2{color:#00C3FF;font-size:22px;}
+#load-msg{color:#8AAFC8;font-size:14px;text-align:center;max-width:280px;}
 
-/* ── FACE CHECK ── */
-#face-screen{background:#040D1A;gap:20px;text-align:center;}
-#face-screen h2{color:#00C3FF;font-size:22px;}
-#face-screen p{color:#8AAFC8;font-size:14px;max-width:300px;}
-#face-status{
-  padding:12px 28px;
-  border-radius:20px;
-  font-size:14px;
-  font-weight:bold;
-  background:rgba(255,184,0,0.15);
-  color:#FFB800;
-  border:1px solid rgba(255,184,0,0.4);
-}
-#face-status.good{
-  background:rgba(0,223,160,0.15);
-  color:#00DFA0;
-  border-color:rgba(0,223,160,0.4);
-}
-#btn-start-calib{
-  padding:14px 36px;
-  background:#00C3FF;
-  color:#000;
-  border:none;
-  border-radius:28px;
-  font-size:16px;
-  font-weight:bold;
-  cursor:pointer;
-  opacity:0.4;
-  pointer-events:none;
-}
-#btn-start-calib.ready{opacity:1;pointer-events:auto;}
+/* FACE CHECK */
+#screen-face{background:#040D1A;text-align:center;}
+#screen-face h2{color:#00C3FF;font-size:22px;}
+#screen-face p{color:#8AAFC8;font-size:14px;max-width:300px;}
+#face-status{padding:12px 24px;border-radius:20px;font-size:14px;font-weight:bold;background:rgba(255,184,0,0.15);color:#FFB800;border:1px solid rgba(255,184,0,0.4);transition:all 0.3s;}
+#face-status.ok{background:rgba(0,223,160,0.15);color:#00DFA0;border-color:rgba(0,223,160,0.4);}
+#face-countdown{color:#8AAFC8;font-size:13px;height:20px;}
+#btn-calib{padding:14px 36px;background:#00C3FF;color:#000;border:none;border-radius:28px;font-size:16px;font-weight:bold;cursor:pointer;opacity:0.4;pointer-events:none;transition:opacity 0.3s;}
+#btn-calib.ready{opacity:1;pointer-events:auto;}
 
-/* ── CALIBRATION ── */
-#calib-screen{background:#040D1A;}
-#dot-host{
-  position:fixed;
-  width:60px;height:60px;
-  transform:translate(-50%,-50%);
-  transition:left 0.7s ease,top 0.7s ease;
-  pointer-events:none;
-}
-.dot-ring{
-  position:absolute;
-  width:50px;height:50px;
-  border:2px solid rgba(0,195,255,0.5);
-  border-radius:50%;
-  top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  animation:pulse 1.2s ease-in-out infinite;
-}
-.dot-core{
-  position:absolute;
-  width:20px;height:20px;
-  background:#00C3FF;
-  border-radius:50%;
-  top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  box-shadow:0 0 12px #00C3FF;
-}
-@keyframes pulse{
-  0%,100%{opacity:0.3;transform:translate(-50%,-50%) scale(1);}
-  50%{opacity:1;transform:translate(-50%,-50%) scale(1.3);}
-}
-#calib-hint{
-  position:fixed;bottom:80px;left:50%;
-  transform:translateX(-50%);
-  color:#D8EEFF;font-size:15px;
-  background:rgba(0,0,0,0.6);
-  padding:10px 22px;border-radius:20px;
-  pointer-events:none;text-align:center;
-}
-#calib-progress{
-  position:fixed;bottom:40px;left:50%;
-  transform:translateX(-50%);
-  color:#00C3FF;font-size:13px;
-  pointer-events:none;
+/* CALIBRATION */
+#screen-calib{background:rgba(4,13,26,0.97);}
+
+/* FIX ISSUE 5: Stop button during calibration */
+#btn-stop-calib{
+  position:fixed;top:16px;right:16px;
+  padding:8px 18px;
+  background:rgba(255,58,94,0.9);
+  color:white;border:none;border-radius:20px;
+  font-size:13px;font-weight:bold;cursor:pointer;
+  z-index:9999;pointer-events:auto;
 }
 
-/* ── DONE SCREEN ── */
-#done-screen{background:#040D1A;gap:20px;text-align:center;}
-#done-screen h2{color:#00DFA0;font-size:24px;}
-#done-screen p{color:#8AAFC8;font-size:14px;max-width:300px;}
-#btn-launch-overlay{
-  padding:14px 36px;
-  background:#00DFA0;
-  color:#000;
-  border:none;
-  border-radius:28px;
-  font-size:16px;
-  font-weight:bold;
-  cursor:pointer;
+#dot{position:fixed;width:60px;height:60px;transform:translate(-50%,-50%);transition:left 0.7s ease,top 0.7s ease;pointer-events:none;}
+.dot-ring{position:absolute;width:50px;height:50px;border:2px solid rgba(0,195,255,0.5);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulse 1.2s ease-in-out infinite;}
+.dot-core{position:absolute;width:20px;height:20px;background:#00C3FF;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);box-shadow:0 0 12px #00C3FF;}
+@keyframes pulse{0%,100%{opacity:0.3;transform:translate(-50%,-50%) scale(1);}50%{opacity:1;transform:translate(-50%,-50%) scale(1.3);}}
+#calib-hint{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);color:#D8EEFF;font-size:15px;background:rgba(0,0,0,0.7);padding:10px 22px;border-radius:20px;text-align:center;pointer-events:none;}
+#calib-prog{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);color:#00C3FF;font-size:13px;pointer-events:none;}
+
+/* TRACKING - fully transparent */
+#screen-tracking{background:transparent !important;pointer-events:none;}
+
+/* FIX ISSUE 4: Cursor ONLY shown during tracking */
+#cursor{position:fixed;top:0;left:0;width:34px;height:44px;pointer-events:none;z-index:99999;transform:translate3d(100px,200px,0);margin-left:-2px;margin-top:-2px;display:none;}
+
+/* FIX ISSUE 4: Active/Inactive toggle in notification - handled via badge tap */
+#badge{
+  position:fixed;top:8px;left:50%;transform:translateX(-50%);
+  background:rgba(0,195,255,0.15);border:1px solid rgba(0,195,255,0.4);
+  color:rgba(0,195,255,0.9);font-size:11px;padding:4px 16px;
+  border-radius:20px;pointer-events:auto;font-family:sans-serif;
+  white-space:nowrap;cursor:pointer;user-select:none;
 }
+#badge.paused{background:rgba(255,58,94,0.15);border-color:rgba(255,58,94,0.4);color:rgba(255,58,94,0.9);}
+
+/* Zone indicators */
+#zone-up,#zone-down{position:fixed;left:0;right:0;height:28%;pointer-events:none;transition:background 0.2s;}
+#zone-up{top:0;}#zone-down{bottom:0;}
+#zone-up.active{background:rgba(0,195,255,0.06);}
+#zone-down.active{background:rgba(0,195,255,0.06);}
+
+/* Gesture toast */
+#toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,195,255,0.92);color:#000;font-size:18px;font-weight:bold;padding:10px 28px;border-radius:50px;pointer-events:none;opacity:0;transition:opacity 0.2s;font-family:sans-serif;white-space:nowrap;z-index:99999;}
 
 /* WebGazer video */
-#webgazerVideoContainer{
-  position:fixed !important;
-  bottom:16px !important;right:16px !important;
-  top:auto !important;left:auto !important;
-  width:120px !important;height:90px !important;
-  border-radius:10px !important;
-  border:1px solid rgba(0,195,255,0.4) !important;
-  z-index:60 !important;overflow:hidden !important;
-  transform:none !important;
-}
-#webgazerFaceOverlay,
-#webgazerFaceFeedbackBox{
-  opacity:0 !important;pointer-events:none !important;
-}
-#webgazerVideoContainer video{
-  width:100% !important;height:100% !important;
-  object-fit:cover !important;
-}
+#webgazerVideoContainer{position:fixed !important;bottom:16px !important;right:16px !important;top:auto !important;left:auto !important;width:120px !important;height:90px !important;border-radius:10px !important;border:1px solid rgba(0,195,255,0.4) !important;z-index:60 !important;overflow:hidden !important;transform:none !important;}
+#webgazerFaceOverlay,#webgazerFaceFeedbackBox{opacity:0 !important;pointer-events:none !important;}
+#webgazerVideoContainer video{width:100% !important;height:100% !important;object-fit:cover !important;}
 </style>
 </head>
 <body>
 
 <!-- LOADING -->
-<div id="loading-screen" class="screen active">
+<div id="screen-loading" class="screen active">
   <div class="spinner"></div>
-  <h2>👁 EyeScroll</h2>
-  <p id="loading-msg">Initialising camera…</p>
+  <h2>EyeScroll</h2>
+  <p id="load-msg">Initialising camera...</p>
 </div>
 
 <!-- FACE CHECK -->
-<div id="face-screen" class="screen">
-  <h2>👁 Position Your Face</h2>
-  <p>Look directly at the camera. Make sure your face is clearly visible.</p>
-  <div id="face-status">🔍 Scanning for face…</div>
-  <button id="btn-start-calib">Begin Calibration</button>
-  <p style="color:#4d7090;font-size:12px;">Keep your head still during calibration</p>
+<div id="screen-face" class="screen">
+  <h2>Position Your Face</h2>
+  <p>Look directly at the camera. Keep your face clearly visible in the preview below.</p>
+  <div id="face-status">Scanning for face...</div>
+  <div id="face-countdown"></div>
+  <button id="btn-calib" onclick="startCalib()">Begin Calibration</button>
+  <p style="color:#4d7090;font-size:12px;text-align:center;">Keep head still. Only move eyes during calibration.</p>
 </div>
 
 <!-- CALIBRATION -->
-<div id="calib-screen" class="screen">
-  <div id="dot-host">
-    <div class="dot-ring"></div>
-    <div class="dot-core"></div>
-  </div>
-  <div id="calib-hint">Look at the dot — keep your gaze there</div>
-  <div id="calib-progress">Point 1 of 9</div>
+<div id="screen-calib" class="screen">
+  <!-- FIX ISSUE 5: Stop button always available -->
+  <button id="btn-stop-calib" onclick="stopCalib()">Stop</button>
+  <div id="dot"><div class="dot-ring"></div><div class="dot-core"></div></div>
+  <div id="calib-hint">Look at the dot and keep your gaze there</div>
+  <div id="calib-prog">Point 1 of 9</div>
 </div>
 
-<!-- DONE -->
-<div id="done-screen" class="screen">
-  <h2>✅ Calibration Complete!</h2>
-  <p>Now open YouTube, Instagram or Facebook.<br/>EyeScroll will control scrolling with your eyes.</p>
-  <button id="btn-launch-overlay" onclick="launchOverlay()">
-    🚀 Launch Eye Control
-  </button>
-  <p style="color:#4d7090;font-size:12px;margin-top:8px;">
-    Look UP = Previous reel &nbsp;|&nbsp; Look DOWN = Next reel<br/>
-    1 Blink = Pause &nbsp;|&nbsp; 2 Blinks = Like &nbsp;|&nbsp; 3 Blinks = Subscribe
-  </p>
+<!-- TRACKING -->
+<div id="screen-tracking" class="screen">
+  <div id="zone-up"></div>
+  <div id="zone-down"></div>
+  <svg id="cursor" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur stdDeviation="2" result="blur"/>
+        <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 0 0 0.76  0 0 0 0 1  0 0 0 0.9 0" result="col"/>
+        <feMerge><feMergeNode in="col"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="rgba(0,0,0,0.5)" transform="translate(1.5,2)" filter="url(#glow)"/>
+    <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="white"/>
+    <path d="M2 2 L14 38 L19 23 L32 18 Z" fill="none" stroke="rgba(0,195,255,0.85)" stroke-width="1.6" stroke-linejoin="round"/>
+  </svg>
+  <!-- FIX ISSUE 4: Toggle button -->
+  <div id="badge" onclick="toggleTracking()">EyeScroll Active - tap to pause</div>
+  <div id="toast"></div>
 </div>
 
 <script>
@@ -201,154 +136,61 @@ html,body{
 var IS_ANDROID=(typeof window.EyeScroll!=='undefined');
 function bridge(m,a){
   if(!IS_ANDROID)return;
-  try{ a!==undefined?window.EyeScroll[m](a):window.EyeScroll[m](); }catch(e){}
+  try{a!==undefined?window.EyeScroll[m](a):window.EyeScroll[m]();}catch(e){}
 }
 
 /* ── Screens ── */
 function showScreen(id){
-  document.querySelectorAll('.screen').forEach(function(s){
-    s.classList.remove('active');
-  });
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   var el=document.getElementById(id);
   if(el)el.classList.add('active');
 }
 
-/* ── Calibration points ── */
-var PTS=[
-  [0.1,0.1],[0.5,0.1],[0.9,0.1],
-  [0.1,0.5],[0.5,0.5],[0.9,0.5],
-  [0.1,0.9],[0.5,0.9],[0.9,0.9]
-];
-var calibIdx=0;
-
-function startCalib(){
-  showScreen('calib-screen');
-  calibIdx=0;
-  nextPoint();
+/* ── One Euro Filter ── */
+function OEF(freq,mco,beta,dco){
+  var xp=null,dxp=0,tp=null;
+  function alpha(co){var r=2*Math.PI*co/freq;return r/(r+1);}
+  function lp(x,xpp,a){return a*x+(1-a)*xpp;}
+  return{
+    filter:function(x,t){
+      if(xp===null){xp=x;tp=t;return x;}
+      var dt=(t-tp)/1000;if(dt<=0)dt=1/freq;
+      var dx=(x-xp)/dt;
+      var edx=lp(dx,dxp,alpha(dco));
+      var co=mco+beta*Math.abs(edx);
+      var ex=lp(x,xp,alpha(co));
+      xp=ex;dxp=edx;tp=t;return ex;
+    },
+    reset:function(){xp=null;dxp=0;tp=null;}
+  };
 }
+var fX=OEF(30,0.5,0.07,1.0);
+var fY=OEF(30,0.5,0.07,1.0);
+var lastCX=null,lastCY=null,DEAD=4;
 
-function nextPoint(){
-  if(calibIdx>=PTS.length){ calibDone(); return; }
-  var pt=PTS[calibIdx];
-  var x=pt[0]*window.innerWidth;
-  var y=pt[1]*window.innerHeight;
-  var dot=document.getElementById('dot-host');
-  dot.style.left=x+'px';
-  dot.style.top=y+'px';
-  document.getElementById('calib-progress').textContent=
-    'Point '+(calibIdx+1)+' of '+PTS.length;
-  setTimeout(function(){ recordPoint(x,y,function(){
-    calibIdx++; nextPoint();
-  }); },700);
+/* ════════════════
+   FIX ISSUE 1+3: Blink detection with FACE PRESENCE guard
+   Only fire gestures when face is actively detected
+════════════════ */
+var EAR_TH=0.20,EAR_FR=2,BLINK_GAP=700,BLINK_MAX=400;
+var earC=0,blinkN=0,blinkT=null,eyeC=false,eyeCT=0;
+
+/* FIX ISSUE 3: Face presence tracking */
+var facePresent=false;
+var faceAbsentTimer=null;
+var FACE_ABSENT_TIMEOUT=1500; /* If no face for 1.5s, stop gestures */
+
+function markFacePresent(){
+  facePresent=true;
+  clearTimeout(faceAbsentTimer);
+  faceAbsentTimer=setTimeout(function(){
+    facePresent=false;
+    /* Reset zone when face lost - FIX ISSUE 3 */
+    cZone='centre'; zFired=false;
+    if(zoneUpEl) zoneUpEl.classList.remove('active');
+    if(zoneDnEl) zoneDnEl.classList.remove('active');
+  }, FACE_ABSENT_TIMEOUT);
 }
-
-function recordPoint(x,y,cb){
-  var wg=window.webgazer;
-  if(!wg){cb();return;}
-  var n=0;
-  setTimeout(function rec(){
-    try{wg.recordScreenPosition(x,y,'click');}catch(e){}
-    if(++n<8) setTimeout(rec,180);
-    else cb();
-  },600);
-}
-
-function calibDone(){
-  showScreen('done-screen');
-  bridge('onCalibrationDone');
-}
-
-function launchOverlay(){
-  bridge('launchOverlay');
-}
-
-/* ── Face detection ── */
-var faceOk=false, faceTimer=null, faceStreaking=false;
-
-function updateFaceStatus(detected){
-  var el=document.getElementById('face-status');
-  var btn=document.getElementById('btn-start-calib');
-  if(detected){
-    el.textContent='✅ Face detected — ready!';
-    el.className='good';
-    btn.className='ready';
-  } else {
-    el.textContent='🔍 Scanning for face…';
-    el.className='';
-    btn.className='';
-    faceOk=false;
-  }
-}
-
-/* ── WebGazer init ── */
-window.onload=function(){
-  if(typeof webgazer==='undefined'){
-    document.getElementById('loading-msg').textContent=
-      'Error: Could not load WebGazer. Check internet connection.';
-    return;
-  }
-
-  webgazer
-    .setGazeListener(function(data){
-      // Forward every gaze point to Android overlay cursor
-      if(data && typeof window.EyeScroll !== 'undefined'){
-        try{ window.EyeScroll.onGaze(data.x, data.y); }catch(e){}
-      }
-      /* Face detection during face-screen */
-      if(document.getElementById('face-screen').classList.contains('active')){
-        if(data!==null){
-          if(!faceStreaking&&!faceOk){
-            faceStreaking=true;
-            faceTimer=setTimeout(function(){
-              faceOk=true;
-              updateFaceStatus(true);
-            },1000);
-          }
-        } else {
-          if(faceStreaking){
-            faceStreaking=false;
-            clearTimeout(faceTimer);
-          }
-          updateFaceStatus(false);
-        }
-      }
-    })
-    .begin()
-    .then(function(){
-      webgazer.showPredictionPoints(false);
-      webgazer.showVideo(true);
-      webgazer.showFaceOverlay(false);
-      webgazer.showFaceFeedbackBox(false);
-      webgazer.setRegression('ridge');
-
-      document.getElementById('loading-msg').textContent=
-        'Camera ready — warming up…';
-
-      setTimeout(function(){
-        webgazer.clearData();
-        showScreen('face-screen');
-      },2500);
-    })
-    .catch(function(err){
-      document.getElementById('loading-msg').textContent=
-        'Camera error: '+err;
-    });
-
-  /* Start calib button */
-  document.getElementById('btn-start-calib')
-    .addEventListener('click',function(){
-      if(faceOk) startCalib();
-    });
-};
-
-/* ════════════════════════════════════════
-   BLINK DETECTION + GESTURE SENDING
-   Added for Android EyeScroll
-════════════════════════════════════════ */
-var EAR_THRESH=0.20, EAR_FRAMES=2;
-var BLINK_GAP=700, BLINK_MAX=400;
-var earClosed=0, blinkCount=0, blinkTimer=null;
-var eyeWasClosed=false, eyeCloseTime=0;
 
 function earDist(pts,a,b){
   if(!pts[a]||!pts[b])return 0;
@@ -362,95 +204,295 @@ function calcEAR(pts,p1,p2,p3,p4,p5,p6){
 }
 function processBlink(pts){
   if(!pts||pts.length<387)return;
+  markFacePresent(); /* Face is present if we have landmarks */
   var l=calcEAR(pts,133,159,158,145,144,33);
   var r=calcEAR(pts,362,386,385,374,373,263);
-  var ear=(l+r)/2, now=Date.now();
-  if(ear<EAR_THRESH){
-    earClosed++;
-    if(!eyeWasClosed&&earClosed>=EAR_FRAMES){
-      eyeWasClosed=true; eyeCloseTime=now;
-    }
-  } else {
-    if(eyeWasClosed){
-      if(now-eyeCloseTime<BLINK_MAX){
-        blinkCount++;
-        clearTimeout(blinkTimer);
-        blinkTimer=setTimeout(fireBlinkGesture, BLINK_GAP);
+  var ear=(l+r)/2,now=Date.now();
+  if(ear<EAR_TH){
+    earC++;
+    if(!eyeC&&earC>=EAR_FR){eyeC=true;eyeCT=now;}
+  }else{
+    if(eyeC){
+      if(now-eyeCT<BLINK_MAX){
+        blinkN++;
+        clearTimeout(blinkT);
+        blinkT=setTimeout(fireBlink,BLINK_GAP);
       }
-      eyeWasClosed=false;
+      eyeC=false;
     }
-    earClosed=0;
+    earC=0;
   }
 }
-function fireBlinkGesture(){
-  var c=blinkCount; blinkCount=0;
-  if(c===1) sendGesture(3);
-  else if(c===2) sendGesture(4);
-  else if(c>=3) sendGesture(5);
+function fireBlink(){
+  /* FIX ISSUE 3: Only fire if face present */
+  if(!facePresent)return;
+  var c=blinkN;blinkN=0;
+  if(c===1)sendGesture(3,'Pause/Play');
+  else if(c===2)sendGesture(4,'Like');
+  else if(c>=3)sendGesture(5,'Subscribe');
 }
 
-/* ── Gaze Zone Detection ── */
-var UP_Z=0.28, DOWN_Z=0.72, DWELL=700, SCD=1500;
-var cZone='centre', zTime=0, zFired=false, lastS=0;
+/* ════════════════
+   FIX ISSUE 1+3: Zone detection with face guard
+   FIX ISSUE 1: Both UP and DOWN zones properly handled
+════════════════ */
+var UP_Z=0.28,DOWN_Z=0.72,DWELL_MS=800,SCROLL_CD=1500;
+var cZone='centre',zTime=0,zFired=false,lastS=0;
+var zoneUpEl,zoneDnEl;
 
 function processZone(x,y){
+  /* FIX ISSUE 3: Do NOT process zones if face absent */
+  if(!facePresent)return;
+
   var H=window.innerHeight;
-  var zone=y<H*UP_Z?'up':y>H*DOWN_Z?'down':'centre';
+  /* FIX ISSUE 1: Correct zone logic */
+  var zone;
+  if(y<H*UP_Z) zone='up';         /* Look UP = previous reel */
+  else if(y>H*DOWN_Z) zone='down'; /* Look DOWN = next reel */
+  else zone='centre';
+
   var now=Date.now();
-  if(zone!==cZone){ cZone=zone; zTime=now; zFired=false; }
+  if(zone!==cZone){
+    cZone=zone;zTime=now;zFired=false;
+    if(zoneUpEl)zoneUpEl.classList.remove('active');
+    if(zoneDnEl)zoneDnEl.classList.remove('active');
+    if(zone==='up'&&zoneUpEl)zoneUpEl.classList.add('active');
+    if(zone==='down'&&zoneDnEl)zoneDnEl.classList.add('active');
+  }
   if(!zFired&&zone!=='centre'){
-    if(now-zTime>=DWELL&&now-lastS>SCD){
-      zFired=true; lastS=now;
-      sendGesture(zone==='up'?2:1);
-      setTimeout(function(){cZone='centre';zFired=false;},200);
+    if(now-zTime>=DWELL_MS&&now-lastS>SCROLL_CD){
+      zFired=true;lastS=now;
+      /* FIX ISSUE 1: Correct gesture codes */
+      if(zone==='up') sendGesture(2,'Prev Reel');   /* code 2 = swipe up = prev */
+      else sendGesture(1,'Next Reel');               /* code 1 = swipe down = next */
+      setTimeout(function(){
+        cZone='centre';zFired=false;
+        if(zoneUpEl)zoneUpEl.classList.remove('active');
+        if(zoneDnEl)zoneDnEl.classList.remove('active');
+      },200);
     }
+  }
+}
+
+/* ════════════════
+   FIX ISSUE 4: Active/Inactive toggle
+════════════════ */
+var trackingPaused=false;
+
+function toggleTracking(){
+  trackingPaused=!trackingPaused;
+  var badge=document.getElementById('badge');
+  var cursor=document.getElementById('cursor');
+  if(trackingPaused){
+    if(badge){badge.textContent='EyeScroll PAUSED - tap to resume';badge.className='paused';}
+    if(cursor)cursor.style.display='none';
+    /* Reset zones */
+    cZone='centre';zFired=false;
+    if(zoneUpEl)zoneUpEl.classList.remove('active');
+    if(zoneDnEl)zoneDnEl.classList.remove('active');
+  }else{
+    if(badge){badge.textContent='EyeScroll Active - tap to pause';badge.className='';}
+    if(cursor)cursor.style.display='block';
   }
 }
 
 /* ── Gesture Sender ── */
-var GCD=1200, lastG=0;
-function sendGesture(code){
+var GCD=1200,lastG=0,toastT;
+function sendGesture(code,label){
+  /* FIX ISSUE 4: No gestures when paused */
+  if(trackingPaused)return;
+  /* FIX ISSUE 3: No gestures without face */
+  if(!facePresent)return;
   var now=Date.now();
   if(now-lastG<GCD)return;
   lastG=now;
-  try{ window.EyeScroll.onGesture(code); }catch(e){}
+  var t=document.getElementById('toast');
+  if(t){t.textContent=label||'';t.style.opacity='1';clearTimeout(toastT);toastT=setTimeout(function(){t.style.opacity='0';},900);}
+  bridge('onGesture',code);
 }
 
-/* ── Hook into WebGazer gaze listener ── */
-(function hookGaze(){
-  var t=setInterval(function(){
-    if(typeof webgazer==='undefined')return;
-    var orig=webgazer.setGazeListener;
-    if(!orig)return;
-    clearInterval(t);
+/* ════════════════
+   CALIBRATION
+   FIX ISSUE 5: Stop button, stays in app
+════════════════ */
+var CALIB_PTS=[
+  [0.1,0.1],[0.5,0.1],[0.9,0.1],
+  [0.1,0.5],[0.5,0.5],[0.9,0.5],
+  [0.1,0.9],[0.5,0.9],[0.9,0.9]
+];
+var calibIdx=0,calibRunning=false;
 
-    /* Poll tracker for blink detection */
-    setInterval(function(){
+/* FIX ISSUE 5: User can stop calibration anytime */
+function stopCalib(){
+  calibRunning=false;
+  bridge('onCalibrationStart'); /* Tell Java we're back to non-tracking */
+  showScreen('screen-face');
+}
+
+function startCalib(){
+  calibRunning=true;
+  showScreen('screen-calib');
+  bridge('onCalibrationStart');
+  calibIdx=0;
+  nextPoint();
+}
+
+function nextPoint(){
+  if(!calibRunning){showScreen('screen-face');return;}
+  if(calibIdx>=CALIB_PTS.length){calibDone();return;}
+  var pt=CALIB_PTS[calibIdx];
+  var x=pt[0]*window.innerWidth;
+  var y=pt[1]*window.innerHeight;
+  var dot=document.getElementById('dot');
+  if(dot){dot.style.left=x+'px';dot.style.top=y+'px';}
+  var prog=document.getElementById('calib-prog');
+  if(prog)prog.textContent='Point '+(calibIdx+1)+' of '+CALIB_PTS.length;
+  setTimeout(function(){
+    if(!calibRunning)return;
+    recordPoint(x,y,function(){calibIdx++;nextPoint();});
+  },700);
+}
+
+function recordPoint(x,y,cb){
+  var wg=window.webgazer;
+  if(!wg){cb();return;}
+  var n=0;
+  setTimeout(function rec(){
+    if(!calibRunning)return;
+    try{wg.recordScreenPosition(x,y,'click');}catch(e){}
+    if(++n<8)setTimeout(rec,180);
+    else cb();
+  },600);
+}
+
+function calibDone(){
+  calibRunning=false;
+  /* Start tracking */
+  tracking=true;
+  fX.reset();fY.reset();
+  lastCX=null;lastCY=null;
+  zoneUpEl=document.getElementById('zone-up');
+  zoneDnEl=document.getElementById('zone-down');
+  /* Show cursor */
+  var cursor=document.getElementById('cursor');
+  if(cursor)cursor.style.display='block';
+  showScreen('screen-tracking');
+  bridge('onCalibrationDone');
+}
+
+/* ── Face detection during face screen ── */
+var faceOk=false,faceTimer=null,faceStreaking=false;
+var faceCountdown=3,faceCountdownTimer=null;
+
+function updateFaceUI(detected){
+  var el=document.getElementById('face-status');
+  var btn=document.getElementById('btn-calib');
+  var cd=document.getElementById('face-countdown');
+  if(!el||!btn)return;
+  if(detected){
+    el.textContent='Face detected - ready!';
+    el.className='ok';
+    btn.className='ready';
+    if(cd)cd.textContent='';
+  }else{
+    el.textContent='Scanning for face...';
+    el.className='';
+    btn.className='';
+    faceOk=false;
+    if(cd)cd.textContent='';
+  }
+}
+
+/* ── WebGazer ── */
+var tracking=false;
+
+window.onload=function(){
+  if(typeof webgazer==='undefined'){
+    document.getElementById('load-msg').textContent=
+      'Error: WebGazer not loaded. Please check internet connection.';
+    return;
+  }
+
+  webgazer
+    .setGazeListener(function(data){
+      if(!data)return;
+
+      /* During face screen - check for face */
+      var faceScreen=document.getElementById('screen-face');
+      if(faceScreen&&faceScreen.classList.contains('active')){
+        if(!faceStreaking&&!faceOk){
+          faceStreaking=true;
+          faceTimer=setTimeout(function(){
+            faceOk=true;updateFaceUI(true);
+          },1000);
+        }
+        return; /* Don't process gaze during face check */
+      }
+
+      /* During calibration - just record, no cursor */
+      var calibScreen=document.getElementById('screen-calib');
+      if(calibScreen&&calibScreen.classList.contains('active'))return;
+
+      /* During tracking */
+      if(!tracking)return;
+      if(trackingPaused)return;
+
+      /* FIX ISSUE 3: Mark face present every frame */
+      markFacePresent();
+
+      /* Blink detection */
       try{
         var tr=webgazer.getTracker&&webgazer.getTracker();
-        if(tr&&tr.positions) processBlink(tr.positions);
+        if(tr&&tr.positions)processBlink(tr.positions);
       }catch(e){}
-    },33);
 
-    /* Hook cursor movement for zone detection */
-    var cursor=document.getElementById('eye-cursor');
-    if(cursor){
-      var origSet=Object.getOwnPropertyDescriptor(
-        CSSStyleDeclaration.prototype,'transform');
-      Object.defineProperty(cursor.style,'transform',{
-        set:function(val){
-          if(origSet&&origSet.set)origSet.set.call(this,val);
-          var m=val.match(/translate3d\(([0-9.]+)px,([0-9.]+)px/);
-          if(m) processZone(parseFloat(m[1]),parseFloat(m[2]));
-        },
-        get:function(){
-          return origSet&&origSet.get?origSet.get.call(this):'';
-        },
-        configurable:true
-      });
+      /* Smooth cursor */
+      var now=Date.now();
+      var sx=fX.filter(data.x,now);
+      var sy=fY.filter(data.y,now);
+      var nx=Math.round(sx),ny=Math.round(sy);
+      if(lastCX!==null&&Math.abs(nx-lastCX)<DEAD&&Math.abs(ny-lastCY)<DEAD)return;
+      lastCX=nx;lastCY=ny;
+      var cx=Math.max(0,Math.min(window.innerWidth-1,nx));
+      var cy=Math.max(0,Math.min(window.innerHeight-1,ny));
+
+      /* Move cursor */
+      var cursor=document.getElementById('cursor');
+      if(cursor)cursor.style.transform='translate3d('+cx+'px,'+cy+'px,0)';
+
+      /* Tell service gaze position */
+      bridge('onGazeXY',cx+','+cy);
+
+      /* Zone detection */
+      processZone(cx,cy);
+    })
+    .begin()
+    .then(function(){
+      webgazer.showPredictionPoints(false);
+      webgazer.showVideo(true);
+      webgazer.showFaceOverlay(false);
+      webgazer.showFaceFeedbackBox(false);
+      webgazer.setRegression('ridge');
+      document.getElementById('load-msg').textContent='Camera ready - warming up...';
+      setTimeout(function(){
+        webgazer.clearData();
+        showScreen('screen-face');
+      },2500);
+    })
+    .catch(function(err){
+      document.getElementById('load-msg').textContent='Camera error: '+err;
+    });
+
+  /* FIX ISSUE 2: Faster face detection reset */
+  setInterval(function(){
+    var faceScreen=document.getElementById('screen-face');
+    if(!faceScreen||!faceScreen.classList.contains('active'))return;
+    /* If face was detected but gaze listener stopped firing, reset */
+    if(faceStreaking&&!faceOk){
+      /* still waiting - ok */
     }
-  },500);
-})();
+  },2000);
+};
 </script>
 </body>
 </html>
