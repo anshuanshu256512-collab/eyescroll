@@ -216,6 +216,19 @@ public class EyeOverlayService extends Service {
         }
 
         @JavascriptInterface
+        public void onGazeXY(String xy){
+            /* Parse "x,y" from HTML bridge */
+            try{
+                String[]parts=xy.split(",");
+                float x=Float.parseFloat(parts[0]);
+                float y=Float.parseFloat(parts[1]);
+                cursorX=x; cursorY=y;
+                if(cursorView!=null) cursorView.postInvalidate();
+                processZone(x,y);
+            }catch(Exception e){}
+        }
+
+        @JavascriptInterface
         public void onCalibrationDone(){
             onCalibrationComplete();
             // Tell user to open YouTube
@@ -315,4 +328,4 @@ public class EyeOverlayService extends Service {
         }
         stopForeground(true);stopSelf();
     }
-    }
+            }
